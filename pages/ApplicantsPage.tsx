@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, Search, Trash2, User, RefreshCw } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Table,
@@ -24,24 +24,33 @@ import { format } from 'date-fns';
 
 export default function ApplicantsPage() {
   const [applicants, setApplicants] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [files, setFiles] = useState<FileList | null>(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedJobId, setSelectedJobId] = useState<string>('all');
 
   useEffect(() => {
-    fetchApplicants();
+    fetchData();
   }, []);
 
-  const fetchApplicants = async () => {
+  const fetchData = async () => {
     setRefreshing(true);
     try {
-      const res = await fetch('/api/applicants');
-      const data = await res.json();
-      setApplicants(data);
+      const [applicantsRes, jobsRes] = await Promise.all([
+        fetch('/api/applicants'),
+        fetch('/api/jobs')
+      ]);
+      const applicantsData = await applicantsRes.json();
+      const jobsData = await jobsRes.json();
+      
+      setApplicants(applicantsData);
+      setJobs(jobsData);
     } catch (error) {
-      toast.error('Failed to fetch applicants');
+      toast.error('Failed to fetch data');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -53,7 +62,7 @@ export default function ApplicantsPage() {
       const res = await fetch(`/api/applicants/${id}`, { method: 'DELETE' });
       if (res.ok) {
         toast.success('Applicant deleted successfully');
-        fetchApplicants();
+        fetchData();
       } else {
         toast.error('Failed to delete applicant');
       }
@@ -71,8 +80,13 @@ export default function ApplicantsPage() {
     for (let i = 0; i < files.length; i++) {
       formData.append('files', files[i]);
     }
+    
+    if (selectedJobId !== 'all') {
+      formData.append('jobId', selectedJobId);
+    }
 
     try {
+      setUploadError(null);
       const res = await fetch('/api/applicants/upload', {
         method: 'POST',
         body: formData,
@@ -82,16 +96,24 @@ export default function ApplicantsPage() {
         toast.success('Applicants uploaded successfully');
         setIsUploadOpen(false);
         setFiles(null);
-        fetchApplicants();
+        fetchData();
       } else {
-        toast.error('Failed to upload applicants');
+        const data = await res.json();
+        const errorMsg = data.error || 'Failed to upload applicants';
+        setUploadError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (error) {
-      toast.error('Upload failed');
+      setUploadError('Upload failed. Please check your connection and try again.');
+      toast.error('Upload failed. Please check your connection and try again.');
     } finally {
       setUploading(false);
     }
   };
+
+  const filteredApplicants = selectedJobId === 'all' 
+    ? applicants 
+    : applicants.filter(a => a.jobId === selectedJobId);
 
   return (
     <div className="space-y-6">
@@ -101,16 +123,14 @@ export default function ApplicantsPage() {
           <p className="text-sm text-gray-500 mt-1">Manage all candidates across different jobs.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={fetchApplicants} disabled={refreshing}>
+          <Button variant="outline" onClick={fetchData} disabled={refreshing}>
             <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
           <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Upload className="mr-2 h-4 w-4" />
-                Upload Resumes / CSV
-              </Button>
+            <DialogTrigger className={buttonVariants()}>
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Resumes / CSV
             </DialogTrigger>
           <DialogContent className="sm:max-w-[525px]">
             <DialogHeader>
@@ -148,6 +168,11 @@ export default function ApplicantsPage() {
                     </ul>
                   </div>
                 )}
+                {uploadError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
+                    {uploadError}
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={!files || files.length === 0 || uploading}>
@@ -160,7 +185,7 @@ export default function ApplicantsPage() {
         </div>
       </div>
 
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center space-x-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
           <Input
@@ -169,6 +194,16 @@ export default function ApplicantsPage() {
             className="pl-8"
           />
         </div>
+        <select 
+          className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          value={selectedJobId}
+          onChange={(e) => setSelectedJobId(e.target.value)}
+        >
+          <option value="all">All Jobs</option>
+          {jobs.map(job => (
+            <option key={job.id} value={job.id}>{job.title}</option>
+          ))}
+        </select>
       </div>
 
       <div className="rounded-md border bg-white">
@@ -177,6 +212,9 @@ export default function ApplicantsPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Phone</TableHead>
+              <TableHead>Education</TableHead>
+              <TableHead>Job Applied</TableHead>
               <TableHead>Source</TableHead>
               <TableHead>Date Added</TableHead>
               <TableHead className="text-right">Actions</TableHead>
@@ -185,46 +223,58 @@ export default function ApplicantsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={8} className="h-24 text-center">
                   <div className="flex justify-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
                   </div>
                 </TableCell>
               </TableRow>
-            ) : applicants.length === 0 ? (
+            ) : filteredApplicants.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center text-gray-500">
+                <TableCell colSpan={8} className="h-24 text-center text-gray-500">
                   No applicants found. Upload some resumes to get started.
                 </TableCell>
               </TableRow>
             ) : (
-              applicants.map((applicant) => (
-                <TableRow key={applicant.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-2">
-                      <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                        <User className="h-4 w-4" />
+              filteredApplicants.map((applicant) => {
+                const appliedJob = jobs.find(j => j.id === applicant.jobId);
+                return (
+                  <TableRow key={applicant.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                          <User className="h-4 w-4" />
+                        </div>
+                        {applicant.name}
                       </div>
-                      {applicant.name}
-                    </div>
-                  </TableCell>
-                  <TableCell>{applicant.email || 'N/A'}</TableCell>
-                  <TableCell>
-                    <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-                      {applicant.source}
-                    </span>
-                  </TableCell>
-                  <TableCell>{format(new Date(applicant.createdAt), 'MMM d, yyyy')}</TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon">
-                      <FileText className="h-4 w-4 text-gray-500" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteApplicant(applicant.id)}>
-                      <Trash2 className="h-4 w-4 text-red-500" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
+                    </TableCell>
+                    <TableCell>{applicant.email || 'N/A'}</TableCell>
+                    <TableCell>{applicant.phone || 'N/A'}</TableCell>
+                    <TableCell>{applicant.education || 'N/A'}</TableCell>
+                    <TableCell>
+                      {appliedJob ? (
+                        <span className="font-medium text-sm text-gray-900">{appliedJob.title}</span>
+                      ) : (
+                        <span className="text-gray-400 italic">General / Unknown</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
+                        {applicant.source}
+                      </span>
+                    </TableCell>
+                    <TableCell>{format(new Date(applicant.createdAt), 'MMM d, yyyy')}</TableCell>
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon">
+                        <FileText className="h-4 w-4 text-gray-500" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleDeleteApplicant(applicant.id)}>
+                        <Trash2 className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>

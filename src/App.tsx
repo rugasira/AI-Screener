@@ -58,10 +58,11 @@ export default function App() {
     <AuthProvider>
       <Router>
         <Routes>
-          <Route path="/careers" element={<CareersPage />} />
+          <Route path="/" element={<CareersPage />} />
+          <Route path="/careers" element={<Navigate to="/" replace />} />
           <Route path="/careers/:jobId/apply" element={<ApplyPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/*" element={
+          <Route path="/admin/*" element={
             <ProtectedRoute>
               <DashboardLayout>
                 <Routes>

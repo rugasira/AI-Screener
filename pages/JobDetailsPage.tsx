@@ -61,7 +61,9 @@ export default function JobDetailsPage() {
     try {
       const res = await fetch('/api/applicants');
       const data = await res.json();
-      setApplicants(data);
+      // Filter applicants to only show those who applied for this specific job
+      const jobApplicants = data.filter((a: any) => a.jobId === id);
+      setApplicants(jobApplicants);
     } catch (error) {
       console.error(error);
     }
@@ -79,6 +81,7 @@ export default function JobDetailsPage() {
       
       const prompt = `
         You are an expert AI recruiter. Evaluate the following candidates against the job description.
+        You are an expert technical recruiter and HR manager.
         
         Job Details:
         Title: ${job.title}
@@ -88,7 +91,7 @@ export default function JobDetailsPage() {
         Passing Score: ${job.passingScore || 70} / 100
 
         Candidates:
-        ${JSON.stringify(applicantsToScreen.map(a => ({ id: a.id, name: a.name, email: a.email, profile: a.profileData })), null, 2)}
+        ${JSON.stringify(applicantsToScreen.map(a => ({ id: a.id, name: a.name, email: a.email, phone: a.phone, education: a.education, reason: a.reason, otherInfo: a.otherInfo, profile: a.profileData })), null, 2)}
 
         Analyze all applicants against the job criteria. Score and rank them.
         For each candidate, if their matchScore is >= ${job.passingScore || 70}, they pass and should receive an interview invitation email.
@@ -133,7 +136,7 @@ export default function JobDetailsPage() {
       if (res.ok) {
         const savedScreening = await res.json();
         toast.success('Screening completed successfully');
-        navigate(`/screening/${id}/${savedScreening.id}`);
+        navigate(`/admin/screening/${id}/${savedScreening.id}`);
       } else {
         toast.error('Screening failed to save');
       }
@@ -176,7 +179,7 @@ export default function JobDetailsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center space-x-4">
-        <Button nativeButton={false} variant="ghost" size="icon" render={<Link to="/" />}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex flex-col gap-1">
@@ -204,11 +207,11 @@ export default function JobDetailsPage() {
               <div>
                 <h3 className="text-sm font-medium text-gray-500">Skills</h3>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {job.skills.split(',').map((skill: string, i: number) => (
+                  {job.skills ? job.skills.split(',').map((skill: string, i: number) => (
                     <span key={i} className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-blue-700 ring-1 ring-inset ring-blue-700/10">
                       {skill.trim()}
                     </span>
-                  ))}
+                  )) : <span className="text-sm text-gray-500">No skills specified</span>}
                 </div>
               </div>
               <div>
@@ -252,6 +255,8 @@ export default function JobDetailsPage() {
                         />
                       </TableHead>
                       <TableHead>Name</TableHead>
+                      <TableHead>Phone</TableHead>
+                      <TableHead>Education</TableHead>
                       <TableHead>Source</TableHead>
                       <TableHead>Date Added</TableHead>
                     </TableRow>
@@ -259,7 +264,7 @@ export default function JobDetailsPage() {
                   <TableBody>
                     {applicants.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="h-24 text-center text-gray-500">
+                        <TableCell colSpan={6} className="h-24 text-center text-gray-500">
                           No applicants available. Go to Applicants to upload some.
                         </TableCell>
                       </TableRow>
@@ -275,6 +280,8 @@ export default function JobDetailsPage() {
                             />
                           </TableCell>
                           <TableCell className="font-medium">{applicant.name}</TableCell>
+                          <TableCell>{applicant.phone || 'N/A'}</TableCell>
+                          <TableCell>{applicant.education || 'N/A'}</TableCell>
                           <TableCell>
                             <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
                               {applicant.source}
@@ -319,9 +326,11 @@ export default function JobDetailsPage() {
                           </p>
                         </div>
                       </div>
-                      <Button nativeButton={false} variant="ghost" size="sm" render={<Link to={`/screening/${id}/${screening.id}`} />}>
-                        View
-                      </Button>
+                      <Link to={`/admin/screening/${id}/${screening.id}`}>
+                        <Button variant="ghost" size="sm">
+                          View
+                        </Button>
+                      </Link>
                     </div>
                   ))}
                 </div>

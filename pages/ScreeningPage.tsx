@@ -113,9 +113,11 @@ export default function ScreeningPage() {
       <div className="text-center py-12">
         <h2 className="text-2xl font-bold text-gray-900">No screening results found</h2>
         <p className="mt-2 text-gray-500">Run a screening first from the job details page.</p>
-        <Button nativeButton={false} render={<Link to={`/jobs/${jobId}`} />} className="mt-4">
-          Back to Job
-        </Button>
+        <Link to={`/admin/jobs/${jobId}`}>
+          <Button className="mt-4">
+            Back to Job
+          </Button>
+        </Link>
       </div>
     );
   }
@@ -124,9 +126,11 @@ export default function ScreeningPage() {
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <Button nativeButton={false} variant="ghost" size="icon" render={<Link to={`/jobs/${jobId}`} />}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
+          <Link to={`/admin/jobs/${jobId}`}>
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </Link>
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-900">AI Screening Results</h1>
             <div className="flex items-center gap-2 mt-1">

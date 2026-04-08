@@ -18,8 +18,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const navigation = [
-    { name: 'Jobs', href: '/', icon: Briefcase },
-    { name: 'Applicants', href: '/applicants', icon: Users },
+    { name: 'Jobs', href: '/admin', icon: Briefcase },
+    { name: 'Applicants', href: '/admin/applicants', icon: Users },
   ];
 
   return (
@@ -61,7 +61,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             
             <div className="pt-4 mt-4 border-t border-gray-100">
               <Link
-                to="/careers"
+                to="/"
                 target="_blank"
                 className="group flex items-center px-3 py-2 text-sm font-medium rounded-md text-purple-700 hover:bg-purple-50"
               >
@@ -140,7 +140,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               })}
               <div className="pt-2 mt-2 border-t border-gray-100">
                 <Link
-                  to="/careers"
+                  to="/"
                   target="_blank"
                   onClick={() => setIsMobileMenuOpen(false)}
                   className="group flex items-center px-3 py-2 text-base font-medium rounded-md text-purple-700 hover:bg-purple-50"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Search, MoreVertical, Briefcase, Calendar, Users, Wand2, Trash2, Edit } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Card,
@@ -144,6 +144,7 @@ export default function JobsPage() {
     try {
       const prompt = `
         You are an expert technical recruiter and HR manager.
+        You are an expert AI recruiter. Evaluate the following candidates against the job description.
         I need to write a job description for a "${title}" position.
         The position type is: ${type === 'internship' ? 'Internship' : type === 'part-time' ? 'Part-time Job' : 'Full-time Job'}.
         
@@ -460,10 +461,8 @@ export default function JobsPage() {
                     </span>
                   </div>
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="-mt-2 -mr-2">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                    <DropdownMenuTrigger className={buttonVariants({ variant: "ghost", size: "icon", className: "-mt-2 -mr-2" })}>
+                      <MoreVertical className="h-4 w-4" />
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem className="cursor-pointer" onClick={() => openEditDialog(job)}>
@@ -515,9 +514,11 @@ export default function JobsPage() {
                   <Users className="mr-1 h-4 w-4" />
                   <span>Screening</span>
                 </div>
-                <Button nativeButton={false} render={<Link to={`/jobs/${job.id}`} />} variant="secondary" size="sm">
-                  View Details
-                </Button>
+                <Link to={`/admin/jobs/${job.id}`}>
+                  <Button variant="secondary" size="sm">
+                    View Details
+                  </Button>
+                </Link>
               </CardFooter>
             </Card>
           ))}
