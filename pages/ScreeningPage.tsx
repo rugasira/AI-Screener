@@ -17,6 +17,9 @@ import {
 } from '@/components/ui/accordion';
 import { Progress } from '@/components/ui/progress';
 import { toast } from 'sonner';
+import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { motion } from 'framer-motion';
 
 export default function ScreeningPage() {
   const { jobId, screeningId } = useParams();
@@ -32,15 +35,17 @@ export default function ScreeningPage() {
 
   const fetchScreeningDetails = async () => {
     try {
-      const [jobRes, screeningsRes] = await Promise.all([
-        fetch('/api/jobs'),
-        fetch(`/api/screenings/${jobId}`)
-      ]);
-      const jobs = await jobRes.json();
-      const jobData = jobs.find((j: any) => j.id === jobId);
-      setJob(jobData);
+      if (!jobId) return;
+      const jobDoc = await getDoc(doc(db, 'jobs', jobId));
+      if (jobDoc.exists()) {
+        setJob({ id: jobDoc.id, ...jobDoc.data() });
+      }
       
-      const screeningsData = await screeningsRes.json();
+      const screeningsSnapshot = await getDocs(collection(db, 'screenings'));
+      const screeningsData = screeningsSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((s: any) => s.jobId === jobId);
+
       if (screeningsData.length > 0) {
         let targetScreening;
         if (screeningId) {
@@ -57,6 +62,7 @@ export default function ScreeningPage() {
         setScreening(targetScreening);
       }
     } catch (error) {
+      console.error('Failed to fetch screening details:', error);
       toast.error('Failed to fetch screening details');
     } finally {
       setLoading(false);
@@ -100,6 +106,51 @@ export default function ScreeningPage() {
     }
   };
 
+  const handleExportCSV = () => {
+    if (!screening || !screening.results || !job) return;
+
+    const headers = ['Name', 'Email', 'Phone Number', 'Position Applied For', 'Match Score', 'AI Decision'];
+    
+    const csvRows = [];
+    csvRows.push(headers.join(','));
+
+    for (const result of screening.results) {
+      const applicant = result.applicant || {};
+      
+      // Escape fields to handle commas and quotes in CSV
+      const escapeCSV = (field: any) => {
+        if (field === null || field === undefined) return '""';
+        const stringField = String(field);
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+          return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+      };
+
+      const row = [
+        escapeCSV(applicant.name || 'Unknown'),
+        escapeCSV(applicant.email || 'N/A'),
+        escapeCSV(applicant.phone || 'N/A'),
+        escapeCSV(job.title || 'N/A'),
+        escapeCSV(result.matchScore),
+        escapeCSV(result.finalRecommendation || 'N/A')
+      ];
+      
+      csvRows.push(row.join(','));
+    }
+
+    const csvContent = csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${job.title.replace(/\s+/g, '_')}_candidates_report.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('CSV Exported Successfully');
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -141,7 +192,7 @@ export default function ScreeningPage() {
             </div>
           </div>
         </div>
-        <Button variant="outline">
+        <Button variant="outline" onClick={handleExportCSV}>
           <Download className="mr-2 h-4 w-4" />
           Export CSV
         </Button>
@@ -149,57 +200,75 @@ export default function ScreeningPage() {
 
       <Accordion type="multiple" className="grid gap-6">
         {screening.results.map((result: any, index: number) => (
-          <Card key={index} className="overflow-hidden border-l-4" style={{ borderLeftColor: result.matchScore >= 80 ? '#22c55e' : result.matchScore >= 60 ? '#eab308' : '#ef4444' }}>
-            <AccordionItem value={`item-${index}`} className="border-b-0">
-              <AccordionTrigger className="hover:no-underline px-6 py-4 bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
-                <div className="flex items-center justify-between w-full pr-4">
-                  <div className="flex items-center space-x-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xl">
-                      #{result.rank}
+          <motion.div
+            key={index}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: index * 0.1 }}
+          >
+            <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: result.matchScore >= 80 ? '#22c55e' : result.matchScore >= 60 ? '#eab308' : '#ef4444' }}>
+              <AccordionItem value={`item-${index}`} className="border-b-0">
+                <AccordionTrigger className="hover:no-underline px-6 py-4 bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center space-x-4">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xl">
+                        #{result.rank}
+                      </div>
+                      <div className="text-left">
+                        <CardTitle className="text-xl">{result.applicant?.name || 'Unknown Candidate'}</CardTitle>
+                        <CardDescription className="mt-1">
+                          Match Score: <span className="font-semibold text-gray-900">{result.matchScore}%</span>
+                        </CardDescription>
+                      </div>
                     </div>
-                    <div className="text-left">
-                      <CardTitle className="text-xl">{result.applicant?.name || 'Unknown Candidate'}</CardTitle>
-                      <CardDescription className="mt-1">
-                        Match Score: <span className="font-semibold text-gray-900">{result.matchScore}%</span>
-                      </CardDescription>
+                    <div className="w-32 hidden sm:block">
+                      <Progress value={result.matchScore} className="h-2" />
                     </div>
                   </div>
-                  <div className="w-32 hidden sm:block">
-                    <Progress value={result.matchScore} className="h-2" />
+                </AccordionTrigger>
+                <AccordionContent className="px-6 pb-6 pt-2">
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="flex items-center text-sm font-semibold text-green-700 mb-3">
+                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                        Key Strengths
+                      </h4>
+                      <ul className="space-y-2">
+                        {result.strengths.map((strength: string, i: number) => (
+                          <motion.li 
+                            key={i} 
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.3, delay: 0.2 + (i * 0.1) }}
+                            className="flex items-start text-sm text-gray-700"
+                          >
+                            <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                            {strength}
+                          </motion.li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 className="flex items-center text-sm font-semibold text-amber-700 mb-3">
+                        <AlertCircle className="mr-2 h-4 w-4" />
+                        Gaps & Risks
+                      </h4>
+                      <ul className="space-y-2">
+                        {result.gaps.map((gap: string, i: number) => (
+                          <motion.li 
+                            key={i} 
+                            initial={{ opacity: 0, x: -10 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.3, delay: 0.2 + (i * 0.1) }}
+                            className="flex items-start text-sm text-gray-700"
+                          >
+                            <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                            {gap}
+                          </motion.li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="px-6 pb-6 pt-2">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div>
-                    <h4 className="flex items-center text-sm font-semibold text-green-700 mb-3">
-                      <CheckCircle2 className="mr-2 h-4 w-4" />
-                      Key Strengths
-                    </h4>
-                    <ul className="space-y-2">
-                      {result.strengths.map((strength: string, i: number) => (
-                        <li key={i} className="flex items-start text-sm text-gray-700">
-                          <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-green-500 flex-shrink-0" />
-                          {strength}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="flex items-center text-sm font-semibold text-amber-700 mb-3">
-                      <AlertCircle className="mr-2 h-4 w-4" />
-                      Gaps & Risks
-                    </h4>
-                    <ul className="space-y-2">
-                      {result.gaps.map((gap: string, i: number) => (
-                        <li key={i} className="flex items-start text-sm text-gray-700">
-                          <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                          {gap}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                </div>
 
                 <div className="mt-6 pt-6 border-t">
                   <h4 className="text-sm font-semibold text-gray-900 mb-2">AI Recommendation</h4>
@@ -264,6 +333,7 @@ export default function ScreeningPage() {
               </AccordionContent>
             </AccordionItem>
           </Card>
+          </motion.div>
         ))}
       </Accordion>
     </div>

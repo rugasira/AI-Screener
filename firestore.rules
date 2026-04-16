@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Check if the user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the user is an admin
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'alexisahishakiye378@gmail.com' ||
+        request.auth.token.email == 'pine06858@gmail.com' ||
+        request.auth.token.email == 'admin@umurava.africa'
+      );
+    }
+
+    // Jobs Collection
+    match /jobs/{jobId} {
+      // Anyone can read jobs (for the public careers page)
+      allow read: if true;
+      // Only admins can create, update, or delete jobs
+      allow write: if isAdmin();
+    }
+
+    // Applicants Collection
+    match /applicants/{applicantId} {
+      // Admins can read all applicants.
+      // Users can only read their own applications.
+      allow read: if isAdmin() || (isAuthenticated() && request.auth.token.email == resource.data.email);
+      
+      // Anyone can create an application (public apply page)
+      allow create: if true;
+      
+      // Only admins can update or delete applicants
+      allow update, delete: if isAdmin();
+    }
+
+    // Screenings Collection
+    match /screenings/{screeningId} {
+      // Only admins can read, create, update, or delete screenings
+      allow read, write: if isAdmin();
+    }
+  }
+}

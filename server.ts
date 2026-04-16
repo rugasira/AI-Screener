@@ -6,6 +6,10 @@ import fs from 'fs';
 import csv from 'csv-parser';
 import nodemailer from 'nodemailer';
 import { createRequire } from 'module';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { GoogleGenAI } from '@google/genai';
 
 let requireFunc: NodeRequire;
 if (typeof require !== 'undefined') {
@@ -15,6 +19,29 @@ if (typeof require !== 'undefined') {
   requireFunc = createRequire(import.meta.url);
 }
 const pdfParse = requireFunc('pdf-parse');
+
+// Initialize Firebase
+const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
+let db: any;
+let auth: any;
+if (fs.existsSync(firebaseConfigPath)) {
+  const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+  const firebaseApp = initializeApp(firebaseConfig);
+  db = getFirestore(firebaseApp, firebaseConfig.firestoreDatabaseId);
+  auth = getAuth(firebaseApp);
+  
+  // Authenticate backend as admin
+  signInWithEmailAndPassword(auth, 'admin@umurava.africa', 'admin123456')
+    .then(() => console.log('Backend authenticated as admin'))
+    .catch(err => console.error('Backend auth failed:', err));
+} else {
+  console.warn('firebase-applet-config.json not found. Using in-memory fallback.');
+  db = {
+    jobs: [] as any[],
+    applicants: [] as any[],
+    screenings: [] as any[],
+  };
+}
 
 const app = express();
 const PORT = 3000;
@@ -27,71 +54,229 @@ app.use((req, res, next) => {
   next();
 });
 
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const upload = multer({ 
-  dest: path.join(process.cwd(), 'uploads/'),
+  dest: uploadsDir,
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB limit
   }
 });
 
-// In-memory database for the hackathon prototype
-const db = {
-  jobs: [] as any[],
-  applicants: [] as any[],
-  screenings: [] as any[],
-};
+// Initialize Gemini API
+const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
 
-// Initialize Gemini API inside routes
+async function parseResumeWithGemini(text: string) {
+  try {
+    const model = genAI.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `
+        Extract the following information from this resume text according to the Talent Profile Schema Specification.
+        
+        Schema:
+        {
+          "firstName": "string",
+          "lastName": "string",
+          "email": "string",
+          "headline": "string (Short professional summary)",
+          "bio": "string (Detailed professional biography)",
+          "location": "string (City, Country)",
+          "skills": [
+            { "name": "string", "level": "Beginner | Intermediate | Advanced | Expert", "yearsOfExperience": number }
+          ],
+          "languages": [
+            { "name": "string", "proficiency": "Basic | Conversational | Fluent | Native" }
+          ],
+          "experience": [
+            {
+              "company": "string",
+              "role": "string",
+              "startDate": "YYYY-MM",
+              "endDate": "YYYY-MM | Present",
+              "description": "string",
+              "technologies": ["string"],
+              "isCurrent": boolean
+            }
+          ],
+          "education": [
+            {
+              "institution": "string",
+              "degree": "string",
+              "fieldOfStudy": "string",
+              "startYear": number,
+              "endYear": number
+            }
+          ],
+          "certifications": [
+            { "name": "string", "issuer": "string", "issueDate": "YYYY-MM" }
+          ],
+          "projects": [
+            {
+              "name": "string",
+              "description": "string",
+              "technologies": ["string"],
+              "role": "string",
+              "link": "string",
+              "startDate": "YYYY-MM",
+              "endDate": "YYYY-MM"
+            }
+          ],
+          "availability": {
+            "status": "Available | Open to Opportunities | Not Available",
+            "type": "Full-time | Part-time | Contract",
+            "startDate": "YYYY-MM-DD"
+          },
+          "socialLinks": {
+            "linkedin": "string",
+            "github": "string",
+            "portfolio": "string"
+          }
+        }
+
+        Resume Text:
+        ${text.substring(0, 15000)}
+
+        Return ONLY the JSON object. Ensure all fields are extracted accurately. If a field is not found, use null or an empty array as appropriate.
+      `,
+      config: {
+        responseMimeType: 'application/json'
+      }
+    });
+
+    const response = await model;
+    return JSON.parse(response.text || '{}');
+  } catch (error) {
+    console.error('Gemini parsing error:', error);
+    return {};
+  }
+}
+
+// --- Helper for Firestore ---
+const isFirestore = (db: any) => typeof db.collection === 'function' || db.type === 'firestore';
 
 // --- API Routes ---
 
 // Get all jobs
-app.get('/api/jobs', (req, res) => {
-  res.json(db.jobs);
+app.get('/api/jobs', async (req, res) => {
+  try {
+    if (isFirestore(db)) {
+      const snapshot = await getDocs(collection(db, 'jobs'));
+      const jobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(jobs);
+    } else {
+      res.json(db.jobs);
+    }
+  } catch (error) {
+    console.error('Error fetching jobs:', error);
+    res.status(500).json({ error: 'Failed to fetch jobs' });
+  }
 });
 
 // Create a job
-app.post('/api/jobs', (req, res) => {
-  const newJob = { id: Date.now().toString(), ...req.body, createdAt: new Date().toISOString() };
-  db.jobs.push(newJob);
-  res.status(201).json(newJob);
+app.post('/api/jobs', async (req, res) => {
+  try {
+    const newJob = { id: Date.now().toString(), ...req.body, createdAt: new Date().toISOString() };
+    if (isFirestore(db)) {
+      await setDoc(doc(db, 'jobs', newJob.id), newJob);
+    } else {
+      db.jobs.push(newJob);
+    }
+    res.status(201).json(newJob);
+  } catch (error) {
+    console.error('Error creating job:', error);
+    res.status(500).json({ error: 'Failed to create job' });
+  }
 });
 
 // Delete a job
-app.delete('/api/jobs/:id', (req, res) => {
-  const { id } = req.params;
-  db.jobs = db.jobs.filter(j => j.id !== id);
-  // Also delete associated screenings
-  db.screenings = db.screenings.filter(s => s.jobId !== id);
-  res.status(200).json({ message: 'Job deleted' });
+app.delete('/api/jobs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isFirestore(db)) {
+      await deleteDoc(doc(db, 'jobs', id));
+      // Also delete associated screenings
+      const screeningsSnapshot = await getDocs(collection(db, 'screenings'));
+      for (const sDoc of screeningsSnapshot.docs) {
+        if (sDoc.data().jobId === id) {
+          await deleteDoc(doc(db, 'screenings', sDoc.id));
+        }
+      }
+    } else {
+      db.jobs = db.jobs.filter((j: any) => j.id !== id);
+      db.screenings = db.screenings.filter((s: any) => s.jobId !== id);
+    }
+    res.status(200).json({ message: 'Job deleted' });
+  } catch (error) {
+    console.error('Error deleting job:', error);
+    res.status(500).json({ error: 'Failed to delete job' });
+  }
 });
 
 // Update a job
-app.put('/api/jobs/:id', (req, res) => {
-  const { id } = req.params;
-  const index = db.jobs.findIndex(j => j.id === id);
-  if (index !== -1) {
-    db.jobs[index] = { ...db.jobs[index], ...req.body };
-    res.status(200).json(db.jobs[index]);
-  } else {
-    res.status(404).json({ error: 'Job not found' });
+app.put('/api/jobs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isFirestore(db)) {
+      await updateDoc(doc(db, 'jobs', id), req.body);
+      const updatedDoc = await getDoc(doc(db, 'jobs', id));
+      res.status(200).json({ id: updatedDoc.id, ...updatedDoc.data() });
+    } else {
+      const index = db.jobs.findIndex((j: any) => j.id === id);
+      if (index !== -1) {
+        db.jobs[index] = { ...db.jobs[index], ...req.body };
+        res.status(200).json(db.jobs[index]);
+      } else {
+        res.status(404).json({ error: 'Job not found' });
+      }
+    }
+  } catch (error) {
+    console.error('Error updating job:', error);
+    res.status(500).json({ error: 'Failed to update job' });
   }
 });
 
 // Get a single job
-app.get('/api/jobs/:id', (req, res) => {
-  const { id } = req.params;
-  const job = db.jobs.find(j => j.id === id);
-  if (job) {
-    res.json(job);
-  } else {
-    res.status(404).json({ error: 'Job not found' });
+app.get('/api/jobs/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isFirestore(db)) {
+      const jobDoc = await getDoc(doc(db, 'jobs', id));
+      if (jobDoc.exists()) {
+        res.json({ id: jobDoc.id, ...jobDoc.data() });
+      } else {
+        res.status(404).json({ error: 'Job not found' });
+      }
+    } else {
+      const job = db.jobs.find((j: any) => j.id === id);
+      if (job) {
+        res.json(job);
+      } else {
+        res.status(404).json({ error: 'Job not found' });
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching job:', error);
+    res.status(500).json({ error: 'Failed to fetch job' });
   }
 });
 
 // Get all applicants
-app.get('/api/applicants', (req, res) => {
-  res.json(db.applicants);
+app.get('/api/applicants', async (req, res) => {
+  try {
+    if (isFirestore(db)) {
+      const snapshot = await getDocs(collection(db, 'applicants'));
+      const applicants = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      res.json(applicants);
+    } else {
+      res.json(db.applicants);
+    }
+  } catch (error) {
+    console.error('Error fetching applicants:', error);
+    res.status(500).json({ error: 'Failed to fetch applicants' });
+  }
 });
 
 // Apply for a job
@@ -167,8 +352,13 @@ app.post('/api/applicants/apply', (req, res, next) => {
       appliedAt: new Date().toISOString()
     };
 
-    db.applicants.push(newApplicant);
-    console.log('Application saved successfully. Total applicants:', db.applicants.length);
+    if (isFirestore(db)) {
+      await setDoc(doc(db, 'applicants', newApplicant.id), newApplicant);
+      console.log('Application saved to Firestore successfully.');
+    } else {
+      db.applicants.push(newApplicant);
+      console.log('Application saved successfully. Total applicants:', db.applicants.length);
+    }
     
     // Clean up uploaded file
     if (file && fs.existsSync(file.path)) {
@@ -196,14 +386,23 @@ app.post('/api/applicants/apply', (req, res, next) => {
 });
 
 // Delete an applicant
-app.delete('/api/applicants/:id', (req, res) => {
-  const { id } = req.params;
-  db.applicants = db.applicants.filter(a => a.id !== id);
-  res.status(200).json({ message: 'Applicant deleted' });
+app.delete('/api/applicants/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (isFirestore(db)) {
+      await deleteDoc(doc(db, 'applicants', id));
+    } else {
+      db.applicants = db.applicants.filter((a: any) => a.id !== id);
+    }
+    res.status(200).json({ message: 'Applicant deleted' });
+  } catch (error) {
+    console.error('Error deleting applicant:', error);
+    res.status(500).json({ error: 'Failed to delete applicant' });
+  }
 });
 
 // Upload applicants (CSV or PDF)
-app.post('/api/applicants/upload', upload.array('files'), async (req, res) => {
+app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => {
   try {
     const files = req.files as Express.Multer.File[];
     const { jobId } = req.body;
@@ -258,12 +457,19 @@ app.post('/api/applicants/upload', upload.array('files'), async (req, res) => {
           const emailMatch = text.match(emailRegex);
           const email = emailMatch ? emailMatch[0] : '';
 
+          // Use Gemini to extract structured data
+          const extractedData = await parseResumeWithGemini(text);
+
           newApplicants.push({
             id: Date.now().toString() + Math.random().toString(36).substring(7),
-            name: name,
-            email: email,
+            name: extractedData.name || name,
+            email: extractedData.email || email,
+            phone: extractedData.phone || '',
+            education: extractedData.education || '',
+            experience: extractedData.experience || '',
+            skills: extractedData.skills || [],
             jobId: jobId || null,
-            profileData: { resumeText: text },
+            profileData: { resumeText: text, ...extractedData },
             source: 'PDF',
             fileName: file.originalname,
             createdAt: new Date().toISOString()
@@ -279,7 +485,13 @@ app.post('/api/applicants/upload', upload.array('files'), async (req, res) => {
       fs.unlinkSync(file.path);
     }
 
-    db.applicants.push(...newApplicants);
+    if (isFirestore(db)) {
+      for (const applicant of newApplicants) {
+        await setDoc(doc(db, 'applicants', applicant.id), applicant);
+      }
+    } else {
+      db.applicants.push(...newApplicants);
+    }
     res.status(201).json({ message: `Successfully processed ${newApplicants.length} applicants`, applicants: newApplicants });
   } catch (error) {
     console.error('Upload error:', error);
@@ -292,7 +504,15 @@ app.post('/api/screenings', async (req, res) => {
   try {
     const { jobId, results, applicantIds } = req.body;
     
-    const applicantsToScreen = db.applicants.filter(a => applicantIds.includes(a.id));
+    let applicantsToScreen: any[] = [];
+    if (isFirestore(db)) {
+      const snapshot = await getDocs(collection(db, 'applicants'));
+      applicantsToScreen = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((a: any) => applicantIds.includes(a.id));
+    } else {
+      applicantsToScreen = db.applicants.filter((a: any) => applicantIds.includes(a.id));
+    }
 
     const screeningRecord = {
       id: Date.now().toString(),
@@ -300,11 +520,32 @@ app.post('/api/screenings', async (req, res) => {
       createdAt: new Date().toISOString(),
       results: results.map((res: any) => ({
         ...res,
-        applicant: applicantsToScreen.find(a => a.id === res.applicantId)
+        applicant: applicantsToScreen.find((a: any) => a.id === res.applicantId)
       }))
     };
 
-    db.screenings.push(screeningRecord);
+    if (isFirestore(db)) {
+      await setDoc(doc(db, 'screenings', screeningRecord.id), screeningRecord);
+      // Update applicants status
+      for (const result of results) {
+        await updateDoc(doc(db, 'applicants', result.applicantId), {
+          status: 'screened',
+          score: result.matchScore,
+          analysis: result.finalRecommendation
+        });
+      }
+    } else {
+      db.screenings.push(screeningRecord);
+      // Update applicants status
+      results.forEach((result: any) => {
+        const applicant = db.applicants.find((a: any) => a.id === result.applicantId);
+        if (applicant) {
+          applicant.status = 'screened';
+          applicant.score = result.matchScore;
+          applicant.analysis = result.finalRecommendation;
+        }
+      });
+    }
 
     res.json(screeningRecord);
   } catch (error) {
@@ -314,9 +555,23 @@ app.post('/api/screenings', async (req, res) => {
 });
 
 // Get screening results for a job
-app.get('/api/screenings/:jobId', (req, res) => {
-  const screenings = db.screenings.filter(s => s.jobId === req.params.jobId);
-  res.json(screenings);
+app.get('/api/screenings/:jobId', async (req, res) => {
+  try {
+    const { jobId } = req.params;
+    if (isFirestore(db)) {
+      const snapshot = await getDocs(collection(db, 'screenings'));
+      const screenings = snapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((s: any) => s.jobId === jobId);
+      res.json(screenings);
+    } else {
+      const screenings = db.screenings.filter((s: any) => s.jobId === jobId);
+      res.json(screenings);
+    }
+  } catch (error) {
+    console.error('Error fetching screenings:', error);
+    res.status(500).json({ error: 'Failed to fetch screenings' });
+  }
 });
 
 // Send email

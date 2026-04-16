@@ -1,7 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, FileText, Search, Trash2, User, RefreshCw } from 'lucide-react';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { 
+  Search, 
+  Users, 
+  Mail, 
+  Phone, 
+  GraduationCap, 
+  Briefcase, 
+  Calendar, 
+  MoreVertical, 
+  Trash2, 
+  ExternalLink,
+  Filter,
+  ArrowRight,
+  ChevronRight,
+  Upload,
+  FileText,
+  FolderOpen,
+  CheckCircle2,
+  X,
+  Play,
+  AlertCircle,
+  Sparkles
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card';
 import {
   Table,
   TableBody,
@@ -11,6 +41,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -19,266 +62,738 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { ScreeningProgressModal } from '@/components/ScreeningProgressModal';
+import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
+import { collection, getDocs, doc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Link, useNavigate } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { useRef } from 'react';
+import { GoogleGenAI } from "@google/genai";
+import { useGooglePicker } from '@/hooks/useGooglePicker';
+
+import { Applicant } from '@/types/talent';
+
+const container = {
+  hidden: { opacity: 0 },
+  show: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05
+    }
+  }
+};
+
+const item = {
+  hidden: { opacity: 0, y: 10 },
+  show: { opacity: 1, y: 0 }
+};
 
 export default function ApplicantsPage() {
-  const [applicants, setApplicants] = useState<any[]>([]);
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [jobs, setJobs] = useState<Record<string, any>>({});
+  const [screeningMap, setScreeningMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [files, setFiles] = useState<FileList | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [jobFilter, setJobFilter] = useState('all');
+  const [selectedApplicants, setSelectedApplicants] = useState<string[]>([]);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [selectedJobId, setSelectedJobId] = useState<string>('all');
+  const [uploadJobId, setUploadJobId] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [screeningLoading, setScreeningLoading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [applicantToDelete, setApplicantToDelete] = useState<string | null>(null);
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const folderInputRef = useRef<HTMLInputElement>(null);
+  const { loadScripts, openPicker, accessToken } = useGooglePicker();
 
   useEffect(() => {
     fetchData();
+    loadScripts();
   }, []);
 
   const fetchData = async () => {
-    setRefreshing(true);
     try {
-      const [applicantsRes, jobsRes] = await Promise.all([
-        fetch('/api/applicants'),
-        fetch('/api/jobs')
-      ]);
-      const applicantsData = await applicantsRes.json();
-      const jobsData = await jobsRes.json();
-      
+      setLoading(true);
+      // Fetch jobs first to map jobIds to titles
+      const jobsSnapshot = await getDocs(collection(db, 'jobs'));
+      const jobsMap: Record<string, any> = {};
+      jobsSnapshot.docs.forEach(doc => {
+        jobsMap[doc.id] = { id: doc.id, ...doc.data() };
+      });
+      setJobs(jobsMap);
+
+      // Fetch applicants
+      const applicantsSnapshot = await getDocs(query(collection(db, 'applicants'), orderBy('createdAt', 'desc')));
+      const applicantsData = applicantsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setApplicants(applicantsData);
-      setJobs(jobsData);
+
+      // Fetch screenings to show screening status
+      const screeningsSnapshot = await getDocs(collection(db, 'screenings'));
+      const sMap: Record<string, any> = {};
+      screeningsSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.results && Array.isArray(data.results)) {
+          data.results.forEach((result: any) => {
+            // Keep the latest screening result for each applicant
+            if (!sMap[result.applicantId] || new Date(data.createdAt) > new Date(sMap[result.applicantId].createdAt)) {
+              sMap[result.applicantId] = {
+                ...result,
+                createdAt: data.createdAt,
+                screeningId: doc.id
+              };
+            }
+          });
+        }
+      });
+      setScreeningMap(sMap);
     } catch (error) {
-      toast.error('Failed to fetch data');
+      console.error('Error fetching data:', error);
+      toast.error('Failed to fetch applicants');
     } finally {
       setLoading(false);
-      setRefreshing(false);
     }
   };
 
   const handleDeleteApplicant = async (id: string) => {
+    setApplicantToDelete(id);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const confirmDeleteApplicant = async () => {
+    if (!applicantToDelete) return;
+    setIsDeleting(true);
     try {
-      const res = await fetch(`/api/applicants/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Applicant deleted successfully');
-        fetchData();
-      } else {
-        toast.error('Failed to delete applicant');
-      }
+      await deleteDoc(doc(db, 'applicants', applicantToDelete));
+      toast.success('Applicant removed');
+      setApplicants(prev => prev.filter(a => a.id !== applicantToDelete));
+      setSelectedApplicants(prev => prev.filter(sid => sid !== applicantToDelete));
     } catch (error) {
       toast.error('Failed to delete applicant');
+    } finally {
+      setIsDeleting(false);
+      setIsDeleteDialogOpen(false);
+      setApplicantToDelete(null);
     }
   };
 
-  const handleUpload = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!files || files.length === 0) return;
+  const handleBulkDelete = async () => {
+    setIsBulkDeleteDialogOpen(true);
+  };
 
-    setUploading(true);
-    const formData = new FormData();
-    for (let i = 0; i < files.length; i++) {
-      formData.append('files', files[i]);
-    }
-    
-    if (selectedJobId !== 'all') {
-      formData.append('jobId', selectedJobId);
-    }
-
+  const confirmBulkDelete = async () => {
+    setIsDeleting(true);
     try {
-      setUploadError(null);
-      const res = await fetch('/api/applicants/upload', {
+      const batch = writeBatch(db);
+      selectedApplicants.forEach(id => {
+        batch.delete(doc(db, 'applicants', id));
+      });
+      await batch.commit();
+      toast.success(`${selectedApplicants.length} applicants removed`);
+      setApplicants(prev => prev.filter(a => !selectedApplicants.includes(a.id)));
+      setSelectedApplicants([]);
+    } catch (error) {
+      toast.error('Failed to delete applicants');
+    } finally {
+      setIsDeleting(false);
+      setIsBulkDeleteDialogOpen(false);
+    }
+  };
+
+  const handleBulkScreen = async () => {
+    if (jobFilter === 'all') {
+      toast.error('Please filter by a specific job to screen applicants');
+      return;
+    }
+    if (selectedApplicants.length === 0) {
+      toast.error('Please select at least one applicant to screen');
+      return;
+    }
+
+    const job = jobs[jobFilter];
+    if (!job) return;
+
+    setScreeningLoading(true);
+    toast.loading(`AI is screening ${selectedApplicants.length} candidates...`, { id: 'screening' });
+    
+    try {
+      const applicantsToScreen = applicants.filter(a => selectedApplicants.includes(a.id));
+      
+      const prompt = `
+        You are an expert AI recruiter. Evaluate the following candidates against the job description using their structured Talent Profile data.
+        
+        Job Details:
+        Title: ${job.title}
+        Requirements: ${job.requirements}
+        Skills: ${job.skills}
+        Experience: ${job.experience}
+        Passing Score: ${job.passingScore || 70} / 100
+
+        Evaluation Criteria:
+        1. Required Fields Check: Ensure the candidate has provided First Name, Last Name, Email, Headline, Location, Skills, Experience, Education, Projects, and Availability.
+        2. Skill Match: Compare candidate's skills (name, level, years) against job requirements.
+        3. Experience Relevance: Evaluate if the work history and projects align with the role.
+        4. Overall Fit: Assess the headline, bio, and certifications.
+
+        Candidates Data (JSON):
+        ${JSON.stringify(applicantsToScreen.map(a => ({ 
+          applicantId: a.id, 
+          profile: a.profileData 
+        })), null, 2)}
+
+        Analyze all applicants against the job criteria. Score (0-100) and rank them.
+        A candidate passes if their matchScore >= ${job.passingScore || 70}.
+        
+        Return a JSON array of results in this format:
+        [
+          {
+            "applicantId": "string",
+            "rank": number,
+            "matchScore": number,
+            "strengths": ["string"],
+            "gaps": ["string"],
+            "finalRecommendation": "string",
+            "emailDraft": "string (Professional invitation or polite rejection based on score)"
+          }
+        ]
+        Only return the JSON array.
+      `;
+
+      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json',
+        }
+      });
+
+      const resultText = response.text || '';
+      const screeningResults = JSON.parse(resultText);
+
+      const res = await fetch('/api/screenings', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: jobFilter, results: screeningResults, applicantIds: selectedApplicants }),
       });
       
       if (res.ok) {
-        toast.success('Applicants uploaded successfully');
-        setIsUploadOpen(false);
-        setFiles(null);
-        fetchData();
+        const savedScreening = await res.json();
+        toast.success('Screening completed successfully', { id: 'screening' });
+        navigate(`/admin/screening/${jobFilter}/${savedScreening.id}`);
       } else {
-        const data = await res.json();
-        const errorMsg = data.error || 'Failed to upload applicants';
-        setUploadError(errorMsg);
-        toast.error(errorMsg);
+        toast.error('Screening failed to save', { id: 'screening' });
       }
     } catch (error) {
-      setUploadError('Upload failed. Please check your connection and try again.');
-      toast.error('Upload failed. Please check your connection and try again.');
+      console.error(error);
+      toast.error('Screening failed', { id: 'screening' });
+    } finally {
+      setScreeningLoading(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, isFolder = false) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setPendingFiles(Array.from(files));
+  };
+
+  const handleDriveSelect = async (docs: any[]) => {
+    if (!accessToken) return;
+    
+    setUploading(true);
+    toast.loading(`Fetching ${docs.length} files from Drive...`, { id: 'drive-fetch' });
+    
+    try {
+      const fetchedFiles: File[] = [];
+      for (const doc of docs) {
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${doc.id}?alt=media`, {
+          headers: {
+            Authorization: `Bearer ${accessToken}`
+          }
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          const file = new File([blob], doc.name, { type: doc.mimeType });
+          fetchedFiles.push(file);
+        }
+      }
+      
+      setPendingFiles(prev => [...prev, ...fetchedFiles]);
+      toast.success(`Fetched ${fetchedFiles.length} files from Drive`, { id: 'drive-fetch' });
+    } catch (error) {
+      console.error('Error fetching from Drive:', error);
+      toast.error('Failed to fetch files from Google Drive', { id: 'drive-fetch' });
     } finally {
       setUploading(false);
     }
   };
 
-  const filteredApplicants = selectedJobId === 'all' 
-    ? applicants 
-    : applicants.filter(a => a.jobId === selectedJobId);
+  const confirmUpload = async () => {
+    if (pendingFiles.length === 0) return;
+    if (!uploadJobId) {
+      toast.error('Please select a job first');
+      return;
+    }
+
+    setUploading(true);
+    toast.loading(`Uploading ${pendingFiles.length} resumes...`, { id: 'upload' });
+    
+    const formData = new FormData();
+    for (let i = 0; i < pendingFiles.length; i++) {
+      formData.append('resumes', pendingFiles[i]);
+    }
+    formData.append('jobId', uploadJobId);
+
+    try {
+      const res = await fetch('/api/applicants/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (res.ok) {
+        toast.success(`Successfully uploaded ${pendingFiles.length} resumes`, { id: 'upload' });
+        setIsUploadOpen(false);
+        setPendingFiles([]);
+        fetchData();
+      } else {
+        const error = await res.json();
+        toast.error(error.message || 'Failed to upload resumes', { id: 'upload' });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to upload resumes', { id: 'upload' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      if (folderInputRef.current) folderInputRef.current.value = '';
+    }
+  };
+
+  const toggleApplicantSelection = (id: string) => {
+    setSelectedApplicants(prev => 
+      prev.includes(id) ? prev.filter(sid => sid !== id) : [...prev, id]
+    );
+  };
+
+  const selectAllFiltered = () => {
+    if (selectedApplicants.length === filteredApplicants.length) {
+      setSelectedApplicants([]);
+    } else {
+      setSelectedApplicants(filteredApplicants.map(a => a.id));
+    }
+  };
+
+  const filteredApplicants = applicants.filter(a => {
+    const matchesSearch = 
+      a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (a.email && a.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (a.education && a.education.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    const matchesJob = jobFilter === 'all' || a.jobId === jobFilter;
+    
+    return matchesSearch && matchesJob;
+  });
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-8 max-w-7xl mx-auto pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900">Applicants Pool</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage all candidates across different jobs.</p>
+          <h1 className="text-4xl font-black tracking-tight text-foreground">Applicants</h1>
+          <p className="text-muted-foreground mt-1 font-medium">Manage all candidates across your job postings.</p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={fetchData} disabled={refreshing}>
-            <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-          <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
-            <DialogTrigger className={buttonVariants()}>
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Resumes / CSV
-            </DialogTrigger>
-          <DialogContent className="sm:max-w-[525px]">
-            <DialogHeader>
-              <DialogTitle>Upload Applicants</DialogTitle>
-              <DialogDescription>
-                Upload resumes (PDF) or a spreadsheet (CSV) containing applicant profiles.
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleUpload}>
-              <div className="grid gap-4 py-4">
-                <div className="flex items-center justify-center w-full">
-                  <label htmlFor="dropzone-file" className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                    <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                      <Upload className="w-8 h-8 mb-4 text-gray-500" />
-                      <p className="mb-2 text-sm text-gray-500"><span className="font-semibold">Click to upload</span> or drag and drop</p>
-                      <p className="text-xs text-gray-500">PDF or CSV files</p>
-                    </div>
-                    <input 
-                      id="dropzone-file" 
-                      type="file" 
-                      className="hidden" 
-                      multiple 
-                      accept=".pdf,.csv"
-                      onChange={(e) => setFiles(e.target.files)}
-                    />
-                  </label>
-                </div>
-                {files && files.length > 0 && (
-                  <div className="text-sm text-gray-600">
-                    Selected {files.length} file(s):
-                    <ul className="list-disc pl-5 mt-2">
-                      {Array.from(files as FileList).map((file: File, i) => (
-                        <li key={i} className="truncate">{file.name}</li>
+        <div className="flex items-center gap-3">
+          {selectedApplicants.length > 0 && jobFilter !== 'all' && (
+            <Button 
+              className="bg-primary hover:bg-primary/90 font-bold shadow-lg shadow-primary/20 h-11 px-6 rounded-xl animate-in fade-in slide-in-from-right-4 duration-300"
+              onClick={handleBulkScreen}
+              disabled={screeningLoading}
+            >
+              <Play className="mr-2 h-4 w-4 fill-current" />
+              Run AI Screening ({selectedApplicants.length})
+            </Button>
+          )}
+          <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if(!open) setPendingFiles([]); }}>
+            <DialogTrigger render={
+              <Button className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-200 h-11 px-6 rounded-xl font-bold">
+                <Upload className="mr-2 h-5 w-5" />
+                Bulk Upload
+              </Button>
+            } />
+            <DialogContent className="sm:max-w-[500px] rounded-2xl border-0 shadow-2xl p-0 overflow-hidden">
+              <div className="bg-primary p-8 text-white">
+                <DialogTitle className="text-3xl font-black tracking-tight">Bulk Upload</DialogTitle>
+                <DialogDescription className="text-primary-foreground/80 font-medium mt-2">
+                  Select a job posting and upload candidate resumes to begin screening.
+                </DialogDescription>
+              </div>
+              <div className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <Label className="font-black text-xs uppercase tracking-widest text-slate-400">Target Job Posting</Label>
+                  <Select value={uploadJobId} onValueChange={setUploadJobId}>
+                    <SelectTrigger className="h-14 border-slate-100 bg-slate-50 rounded-2xl focus:ring-primary/20">
+                      <SelectValue placeholder="Choose a job role..." />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl border-slate-100">
+                      {Object.values(jobs).map((job: any) => (
+                        <SelectItem key={job.id} value={job.id} className="py-3 rounded-xl">{job.title}</SelectItem>
                       ))}
-                    </ul>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {pendingFiles.length === 0 ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button 
+                      variant="outline" 
+                      className="h-32 flex flex-col gap-3 rounded-2xl border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading || !uploadJobId}
+                    >
+                      <div className="bg-slate-50 p-3 rounded-xl group-hover:bg-white transition-colors">
+                        <FileText className="h-6 w-6 text-slate-400 group-hover:text-primary" />
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-primary">Select Files</span>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="h-32 flex flex-col gap-3 rounded-2xl border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group"
+                      onClick={() => folderInputRef.current?.click()}
+                      disabled={uploading || !uploadJobId}
+                    >
+                      <div className="bg-slate-50 p-3 rounded-xl group-hover:bg-white transition-colors">
+                        <FolderOpen className="h-6 w-6 text-slate-400 group-hover:text-primary" />
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-primary">Select Folder</span>
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="h-32 flex flex-col gap-3 rounded-2xl border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group col-span-2"
+                      onClick={() => openPicker(handleDriveSelect)}
+                      disabled={uploading || !uploadJobId}
+                    >
+                      <div className="bg-slate-50 p-3 rounded-xl group-hover:bg-white transition-colors">
+                        <svg className="h-6 w-6 text-slate-400 group-hover:text-primary" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12.5,2L6.5,12.2L3.3,18h12l3-5.2L12.5,2z M10,12.2l2.5-4.3l2.5,4.3H10z M18.5,18l-3-5.2l3-5.2l3,5.2L18.5,18z M15.3,18H3.3l3-5.2h12L15.3,18z"/>
+                        </svg>
+                      </div>
+                      <span className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-primary">Upload from Google Drive</span>
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 max-h-[200px] overflow-y-auto space-y-2">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-black uppercase tracking-widest text-slate-400">{pendingFiles.length} Files Selected</span>
+                        <Button variant="ghost" size="sm" onClick={() => setPendingFiles([])} className="h-7 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5">Clear</Button>
+                      </div>
+                      {pendingFiles.slice(0, 5).map((file, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-sm font-bold text-slate-600 bg-white p-2 rounded-lg border border-slate-100">
+                          <FileText className="h-4 w-4 text-primary" />
+                          <span className="truncate">{file.name}</span>
+                        </div>
+                      ))}
+                      {pendingFiles.length > 5 && (
+                        <p className="text-[10px] font-bold text-slate-400 text-center py-1">And {pendingFiles.length - 5} more files...</p>
+                      )}
+                    </div>
+                    <Button 
+                      className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20"
+                      onClick={confirmUpload}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <div className="flex items-center gap-2">
+                          <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          Uploading...
+                        </div>
+                      ) : (
+                        'Confirm & Upload Resumes'
+                      )}
+                    </Button>
                   </div>
                 )}
-                {uploadError && (
-                  <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600 text-sm">
-                    {uploadError}
+                
+                <input type="file" ref={fileInputRef} className="hidden" multiple accept=".pdf,.csv,.docx" onChange={(e) => handleFileUpload(e)} />
+                <input type="file" ref={folderInputRef} className="hidden" webkitdirectory="" directory="" onChange={(e) => handleFileUpload(e, true)} />
+                
+                {!uploadJobId && (
+                  <div className="flex items-center justify-center gap-2 text-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <p className="text-[10px] font-black uppercase tracking-widest">
+                      Please select a job posting first
+                    </p>
                   </div>
                 )}
               </div>
-              <DialogFooter>
-                <Button type="submit" disabled={!files || files.length === 0 || uploading}>
-                  {uploading ? 'Uploading...' : 'Upload Files'}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
-      <div className="flex items-center space-x-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+      <div className="flex flex-col md:flex-row gap-4 items-center">
+        <div className="relative flex-1 w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search applicants..."
-            className="pl-8"
+            placeholder="Search by name, email or education..."
+            className="pl-10 h-12 border-border shadow-sm rounded-xl"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
-        <select 
-          className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          value={selectedJobId}
-          onChange={(e) => setSelectedJobId(e.target.value)}
-        >
-          <option value="all">All Jobs</option>
-          {jobs.map(job => (
-            <option key={job.id} value={job.id}>{job.title}</option>
-          ))}
-        </select>
+        <div className="w-full md:w-72">
+          <Select value={jobFilter} onValueChange={setJobFilter}>
+            <SelectTrigger className="h-12 border-slate-200 bg-white rounded-xl shadow-sm focus:ring-primary/20">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <Filter className="h-4 w-4 text-slate-400 shrink-0" />
+                <SelectValue placeholder="Filter by Job">
+                  {jobFilter === 'all' ? 'All Job Postings' : jobs[jobFilter]?.title}
+                </SelectValue>
+              </div>
+            </SelectTrigger>
+            <SelectContent className="rounded-2xl border-slate-100">
+              <SelectItem value="all" className="py-3 rounded-xl">All Job Postings</SelectItem>
+              {Object.values(jobs).map((job: any) => (
+                <SelectItem key={job.id} value={job.id} className="py-3 rounded-xl">{job.title}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      <div className="rounded-md border bg-white">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Education</TableHead>
-              <TableHead>Job Applied</TableHead>
-              <TableHead>Source</TableHead>
-              <TableHead>Date Added</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
-                  <div className="flex justify-center">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : filteredApplicants.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-gray-500">
-                  No applicants found. Upload some resumes to get started.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filteredApplicants.map((applicant) => {
-                const appliedJob = jobs.find(j => j.id === applicant.jobId);
-                return (
-                  <TableRow key={applicant.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                          <User className="h-4 w-4" />
-                        </div>
-                        {applicant.name}
-                      </div>
-                    </TableCell>
-                    <TableCell>{applicant.email || 'N/A'}</TableCell>
-                    <TableCell>{applicant.phone || 'N/A'}</TableCell>
-                    <TableCell>{applicant.education || 'N/A'}</TableCell>
-                    <TableCell>
-                      {appliedJob ? (
-                        <span className="font-medium text-sm text-gray-900">{appliedJob.title}</span>
-                      ) : (
-                        <span className="text-gray-400 italic">General / Unknown</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
-                        {applicant.source}
-                      </span>
-                    </TableCell>
-                    <TableCell>{format(new Date(applicant.createdAt), 'MMM d, yyyy')}</TableCell>
-                    <TableCell className="text-right">
-                      <Button variant="ghost" size="icon">
-                        <FileText className="h-4 w-4 text-gray-500" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDeleteApplicant(applicant.id)}>
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
-                    </TableCell>
+      <DeleteConfirmationDialog
+        isOpen={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={confirmDeleteApplicant}
+        title="Remove Applicant"
+        description="Are you sure you want to remove this applicant? This action cannot be undone."
+        isLoading={isDeleting}
+      />
+
+      <DeleteConfirmationDialog
+        isOpen={isBulkDeleteDialogOpen}
+        onOpenChange={setIsBulkDeleteDialogOpen}
+        onConfirm={confirmBulkDelete}
+        title="Remove Multiple Applicants"
+        description={`Are you sure you want to remove ${selectedApplicants.length} selected applicants? This action cannot be undone.`}
+        isLoading={isDeleting}
+      />
+
+      <ScreeningProgressModal 
+        isOpen={screeningLoading} 
+        candidateCount={selectedApplicants.length} 
+      />
+
+      <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
+        <div className="h-2 w-full bg-primary" />
+        <CardHeader className="pb-2">
+          <CardTitle className="text-2xl font-black flex items-center gap-2">
+            <Users className="h-6 w-6 text-primary" />
+            Candidate Pool
+          </CardTitle>
+          <CardDescription className="font-medium">
+            Showing {filteredApplicants.length} applicant{filteredApplicants.length !== 1 ? 's' : ''}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 space-y-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+              <p className="text-muted-foreground animate-pulse">Loading applicants...</p>
+            </div>
+          ) : filteredApplicants.length === 0 ? (
+            <div className="text-center py-20">
+              <div className="bg-muted/30 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Users className="h-10 w-10 text-muted-foreground/30" />
+              </div>
+              <h3 className="text-xl font-black text-foreground">No applicants found</h3>
+              <p className="text-muted-foreground mt-2">Try adjusting your search or filters.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader className="bg-muted/50">
+                  <TableRow className="hover:bg-transparent border-border">
+                    <TableHead className="w-[50px] pl-6">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                        checked={selectedApplicants.length === filteredApplicants.length && filteredApplicants.length > 0}
+                        onChange={selectAllFiltered}
+                      />
+                    </TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Candidate</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Applied For</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Education</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">AI Status</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Applied On</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Source</TableHead>
+                    <TableHead className="w-[80px] pr-6"></TableHead>
                   </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-      </div>
+                </TableHeader>
+                <motion.tbody
+                  variants={container}
+                  initial="hidden"
+                  animate="show"
+                  className="[&_tr:last-child]:border-0"
+                >
+                  <AnimatePresence mode="popLayout">
+                    {filteredApplicants.map((applicant) => (
+                      <motion.tr 
+                        key={applicant.id}
+                        variants={item}
+                        className={cn(
+                          "group hover:bg-muted/30 transition-colors border-border cursor-pointer",
+                          selectedApplicants.includes(applicant.id) && "bg-primary/5"
+                        )}
+                        onClick={() => toggleApplicantSelection(applicant.id)}
+                      >
+                          <TableCell className="pl-6 py-4" onClick={(e) => e.stopPropagation()}>
+                            <input 
+                              type="checkbox" 
+                              className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer"
+                              checked={selectedApplicants.includes(applicant.id)}
+                              onChange={() => toggleApplicantSelection(applicant.id)}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-black text-foreground text-base">{applicant.name}</span>
+                              <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mt-0.5">
+                                <Mail className="h-3 w-3" />
+                                {applicant.email || 'N/A'}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Link to={`/admin/jobs/${applicant.jobId}`} className="group/link">
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-sm text-foreground group-hover/link:text-primary transition-colors">
+                                  {jobs[applicant.jobId]?.title || 'Unknown Job'}
+                                </span>
+                                <ChevronRight className="h-3 w-3 opacity-0 group-hover/link:opacity-100 group-hover/link:translate-x-1 transition-all text-primary" />
+                              </div>
+                            </Link>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
+                              <GraduationCap className="h-4 w-4 text-primary/60" />
+                              <span className="truncate max-w-[150px]">{applicant.education || 'N/A'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {screeningMap[applicant.id] ? (
+                              <Link to={`/admin/screening/${applicant.jobId}/${screeningMap[applicant.id].screeningId}`}>
+                                <div className="flex flex-col gap-1 group/status">
+                                  <div className={cn(
+                                    "inline-flex items-center w-fit gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                                    screeningMap[applicant.id].matchScore >= (jobs[applicant.jobId]?.passingScore || 70)
+                                      ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                                      : "bg-rose-50 text-rose-600 border-rose-100"
+                                  )}>
+                                    <Sparkles className="h-3 w-3" />
+                                    {screeningMap[applicant.id].matchScore}% Match
+                                  </div>
+                                  <span className="text-[9px] font-bold text-muted-foreground group-hover/status:text-primary transition-colors">
+                                    View Report
+                                  </span>
+                                </div>
+                              </Link>
+                            ) : (
+                              <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground/40 uppercase tracking-widest">
+                                <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/20" />
+                                Not Screened
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-sm font-bold text-muted-foreground">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-4 w-4 text-muted-foreground/60" />
+                              {format(new Date(applicant.createdAt), 'MMM d, yyyy')}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <span className={cn(
+                              "text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider border",
+                              applicant.source === 'upload' 
+                                ? "bg-blue-50 text-blue-600 border-blue-100" 
+                                : "bg-green-50 text-green-600 border-green-100"
+                            )}>
+                              {applicant.source || 'Direct'}
+                            </span>
+                          </TableCell>
+                          <TableCell className="pr-6 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
+                                <MoreVertical className="h-5 w-5" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-48">
+                                <DropdownMenuItem className="font-bold py-2.5 cursor-pointer" render={
+                                  <Link to={`/admin/jobs/${applicant.jobId}`}>
+                                    <div className="flex items-center">
+                                      <Briefcase className="mr-2 h-4 w-4" />
+                                      View Job Details
+                                    </div>
+                                  </Link>
+                                } />
+                                <DropdownMenuItem 
+                                  className="text-destructive font-bold py-2.5 cursor-pointer focus:text-destructive focus:bg-destructive/5"
+                                  onClick={() => handleDeleteApplicant(applicant.id)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove Applicant
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </motion.tr>
+                      ))}
+                    </AnimatePresence>
+                  </motion.tbody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+        {selectedApplicants.length > 0 && (
+          <CardFooter className="bg-slate-900 border-t border-slate-800 py-4 flex justify-between items-center px-6 rounded-b-2xl">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-black text-white">
+                {selectedApplicants.length} applicant{selectedApplicants.length !== 1 ? 's' : ''} selected
+              </span>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5"
+                onClick={() => setSelectedApplicants([])}
+              >
+                Clear selection
+              </Button>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                className="font-bold shadow-lg shadow-destructive/10 h-10 px-5 rounded-xl"
+                onClick={handleBulkDelete}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Remove Selected
+              </Button>
+            </div>
+          </CardFooter>
+        )}
+      </Card>
     </div>
   );
 }

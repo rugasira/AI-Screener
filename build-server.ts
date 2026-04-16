@@ -5,8 +5,8 @@ esbuild.build({
   bundle: true,
   platform: 'node',
   target: 'node20',
-  outfile: 'dist/server.cjs',
-  format: 'cjs',
+  outfile: 'dist/server.js',
+  format: 'esm',
   external: [
     'express',
     'multer',
