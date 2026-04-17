@@ -75,6 +75,7 @@ import { cn } from '@/lib/utils';
 import { useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { useGooglePicker } from '@/hooks/useGooglePicker';
+import { screenApplicants } from '@/lib/gemini';
 
 import { Applicant } from '@/types/talent';
 
@@ -228,57 +229,7 @@ export default function ApplicantsPage() {
     try {
       const applicantsToScreen = applicants.filter(a => selectedApplicants.includes(a.id));
       
-      const prompt = `
-        You are an expert AI recruiter. Evaluate the following candidates against the job description using their structured Talent Profile data.
-        
-        Job Details:
-        Title: ${job.title}
-        Requirements: ${job.requirements}
-        Skills: ${job.skills}
-        Experience: ${job.experience}
-        Passing Score: ${job.passingScore || 70} / 100
-
-        Evaluation Criteria:
-        1. Required Fields Check: Ensure the candidate has provided First Name, Last Name, Email, Headline, Location, Skills, Experience, Education, Projects, and Availability.
-        2. Skill Match: Compare candidate's skills (name, level, years) against job requirements.
-        3. Experience Relevance: Evaluate if the work history and projects align with the role.
-        4. Overall Fit: Assess the headline, bio, and certifications.
-
-        Candidates Data (JSON):
-        ${JSON.stringify(applicantsToScreen.map(a => ({ 
-          applicantId: a.id, 
-          profile: a.profileData 
-        })), null, 2)}
-
-        Analyze all applicants against the job criteria. Score (0-100) and rank them.
-        A candidate passes if their matchScore >= ${job.passingScore || 70}.
-        
-        Return a JSON array of results in this format:
-        [
-          {
-            "applicantId": "string",
-            "rank": number,
-            "matchScore": number,
-            "strengths": ["string"],
-            "gaps": ["string"],
-            "finalRecommendation": "string",
-            "emailDraft": "string (Professional invitation or polite rejection based on score)"
-          }
-        ]
-        Only return the JSON array.
-      `;
-
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        }
-      });
-
-      const resultText = response.text || '';
-      const screeningResults = JSON.parse(resultText);
+      const screeningResults = await screenApplicants(job, applicantsToScreen);
 
       const res = await fetch('/api/screenings', {
         method: 'POST',
@@ -293,9 +244,9 @@ export default function ApplicantsPage() {
       } else {
         toast.error('Screening failed to save', { id: 'screening' });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Screening failed', { id: 'screening' });
+      toast.error(error.message || 'Screening failed', { id: 'screening' });
     } finally {
       setScreeningLoading(false);
     }

@@ -63,6 +63,8 @@ import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc } from 'firebase
 import { db } from '@/lib/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 
+import { generateJobDetails } from '@/lib/gemini';
+
 const container = {
   hidden: { opacity: 0 },
   show: {
@@ -93,6 +95,7 @@ export default function JobsPage() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const bulkFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -100,6 +103,7 @@ export default function JobsPage() {
 
   // Form state
   const [title, setTitle] = useState('');
+  const [location, setLocation] = useState('');
   const [type, setType] = useState('job');
   const [requirements, setRequirements] = useState('');
   const [skills, setSkills] = useState('');
@@ -127,6 +131,7 @@ export default function JobsPage() {
   const openEditDialog = (job: any) => {
     setEditingJobId(job.id);
     setTitle(job.title);
+    setLocation(job.location || '');
     setType(job.type);
     setRequirements(job.requirements);
     setSkills(job.skills);
@@ -138,6 +143,7 @@ export default function JobsPage() {
 
   const resetForm = () => {
     setTitle('');
+    setLocation('');
     setType('job');
     setRequirements('');
     setSkills('');
@@ -149,9 +155,11 @@ export default function JobsPage() {
 
   const handleCreateOrEditJob = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       const jobData = {
         title,
+        location,
         type,
         requirements,
         skills,
@@ -177,6 +185,8 @@ export default function JobsPage() {
     } catch (error) {
       console.error('Error saving job:', error);
       toast.error(editingJobId ? 'Failed to update job' : 'Failed to create job');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -210,39 +220,15 @@ export default function JobsPage() {
 
     setIsGenerating(true);
     try {
-      const prompt = `
-        You are an expert technical recruiter and HR manager.
-        I need to write a job description for a "${title}" position.
-        The position type is: ${type === 'internship' ? 'Internship' : type === 'part-time' ? 'Part-time Job' : 'Full-time Job'}.
-        
-        Please generate the following details in JSON format:
-        {
-          "requirements": "A concise paragraph or bullet points describing the main responsibilities and requirements.",
-          "skills": "A comma-separated list of 5-8 key skills required.",
-          "experience": "A short string describing the required experience level."
-        }
-        
-        Only return the JSON object, no markdown formatting.
-      `;
-
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        }
-      });
-
-      const resultText = response.text || '';
-      const generatedData = JSON.parse(resultText);
+      const generatedData = await generateJobDetails(title, type);
+      
       setRequirements(generatedData.requirements || '');
       setSkills(generatedData.skills || '');
       setExperience(generatedData.experience || '');
       toast.success('Details generated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI Generation error:', error);
-      toast.error('Failed to generate details with AI.');
+      toast.error(error.message || 'Failed to generate details with AI.');
     } finally {
       setIsGenerating(false);
     }
@@ -347,7 +333,19 @@ export default function JobsPage() {
                   </Select>
                 </div>
               </div>
-              
+
+              <div className="space-y-2">
+                <Label htmlFor="location" className="font-bold">Location</Label>
+                <Input
+                  id="location"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="e.g. Kigali, Rwanda (or Remote)"
+                  className="h-11 border-border"
+                  required
+                />
+              </div>
+
               <div className="flex justify-end">
                 <Button 
                   type="button" 
@@ -422,7 +420,9 @@ export default function JobsPage() {
                 />
               </div>
               <DialogFooter className="pt-4">
-                <Button type="submit" className="w-full h-11 text-lg font-bold">Create Role</Button>
+                <Button type="submit" disabled={isSubmitting} className="w-full h-11 text-lg font-bold">
+                  {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Creating Role...</> : 'Create Role'}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>
@@ -540,7 +540,9 @@ export default function JobsPage() {
                 />
               </div>
               <DialogFooter className="pt-4">
-                <Button type="submit" className="w-full h-11 text-lg font-bold">Save Changes</Button>
+                <Button type="submit" disabled={isSubmitting} className="w-full h-11 text-lg font-bold">
+                  {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Updating...</> : 'Save Changes'}
+                </Button>
               </DialogFooter>
             </form>
           </DialogContent>

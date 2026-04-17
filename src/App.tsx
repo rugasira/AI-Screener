@@ -2,6 +2,8 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import DashboardLayout from '@/components/DashboardLayout';
+import DashboardPage from '@/pages/DashboardPage';
+import ShortlistedPage from '@/pages/ShortlistedPage';
 import JobsPage from '@/pages/JobsPage';
 import JobDetailsPage from '@/pages/JobDetailsPage';
 import ScreeningPage from '@/pages/ScreeningPage';
@@ -63,9 +65,11 @@ export default function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <Routes>
-                  <Route path="/" element={<JobsPage />} />
+                  <Route path="/" element={<DashboardPage />} />
+                  <Route path="/jobs" element={<JobsPage />} />
                   <Route path="/jobs/:id" element={<JobDetailsPage />} />
                   <Route path="/applicants" element={<ApplicantsPage />} />
+                  <Route path="/shortlisted" element={<ShortlistedPage />} />
                   <Route path="/screening/:jobId" element={<ScreeningPage />} />
                   <Route path="/screening/:jobId/:screeningId" element={<ScreeningPage />} />
                 </Routes>

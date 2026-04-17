@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Briefcase, Users, Settings, LogOut, Menu, X, ExternalLink, Sparkles, LayoutDashboard, ChevronRight, Bell, Search, AlertCircle } from 'lucide-react';
+import { Briefcase, Users, Settings, LogOut, Menu, X, ExternalLink, Sparkles, LayoutDashboard, ChevronRight, Bell, Search, AlertCircle, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -78,8 +78,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const navigation = [
-    { name: 'Job Postings', href: '/admin', icon: Briefcase },
+    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { name: 'Job Postings', href: '/admin/jobs', icon: Briefcase },
     { name: 'Applicants', href: '/admin/applicants', icon: Users },
+    { name: 'Shortlisted', href: '/admin/shortlisted', icon: Award },
   ];
 
   return (
@@ -104,7 +106,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <nav className="space-y-2">
               {navigation.map((item) => {
                 const isActive = item.href === '/admin' 
-                  ? location.pathname === '/admin' || location.pathname.startsWith('/admin/jobs')
+                  ? location.pathname === '/admin' || location.pathname === '/admin/'
                   : location.pathname.startsWith(item.href);
                 return (
                   <Link

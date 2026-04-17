@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 
 export default function ScreeningPage() {
   const { jobId, screeningId } = useParams();
@@ -199,95 +200,115 @@ export default function ScreeningPage() {
       </div>
 
       <Accordion type="multiple" className="grid gap-6">
-        {screening.results.map((result: any, index: number) => (
+        {screening.results.map((result: any, index: number) => {
+          const passScore = job.passingScore || 70;
+          const isPassed = result.matchScore >= passScore;
+          const isExceptional = result.matchScore >= 90;
+
+          let ringColor = 'ring-slate-200';
+          let glowClass = '';
+          let badgeColor = 'bg-slate-100 text-slate-700';
+
+          if (isExceptional) {
+            ringColor = 'ring-emerald-500';
+            glowClass = 'shadow-[0_0_15px_rgba(16,185,129,0.3)] border-emerald-500';
+            badgeColor = 'bg-emerald-100 text-emerald-800';
+          } else if (isPassed) {
+            ringColor = 'ring-amber-500';
+            glowClass = 'shadow-[0_0_15px_rgba(245,158,11,0.2)] border-amber-500';
+            badgeColor = 'bg-amber-100 text-amber-800';
+          } else {
+            ringColor = 'ring-rose-500';
+            badgeColor = 'bg-rose-100 text-rose-800';
+          }
+
+          return (
           <motion.div
             key={index}
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: index * 0.1 }}
+            transition={{ duration: 0.3, delay: index * 0.05 }}
           >
-            <Card className="overflow-hidden border-l-4" style={{ borderLeftColor: result.matchScore >= 80 ? '#22c55e' : result.matchScore >= 60 ? '#eab308' : '#ef4444' }}>
+            <Card className={`overflow-hidden border transition-all duration-200 bg-white shadow-sm hover:shadow-md ${isExceptional ? 'border-emerald-200' : isPassed ? 'border-amber-200' : 'border-slate-200'}`}>
               <AccordionItem value={`item-${index}`} className="border-b-0">
-                <AccordionTrigger className="hover:no-underline px-6 py-4 bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
-                  <div className="flex items-center justify-between w-full pr-4">
+                <AccordionTrigger className="hover:no-underline px-6 py-4 bg-white transition-colors group">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between w-full pr-4 gap-4">
                     <div className="flex items-center space-x-4">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary font-bold text-xl">
+                      <div className={`flex h-10 w-10 items-center justify-center rounded-lg font-bold text-lg ${badgeColor}`}>
                         #{result.rank}
                       </div>
                       <div className="text-left">
-                        <CardTitle className="text-xl">{result.applicant?.name || 'Unknown Candidate'}</CardTitle>
-                        <CardDescription className="mt-1">
-                          Match Score: <span className="font-semibold text-gray-900">{result.matchScore}%</span>
+                        <CardTitle className="text-lg font-bold text-slate-800">{result.applicant?.name || 'Unknown Candidate'}</CardTitle>
+                        <CardDescription className="mt-1 text-sm font-medium text-slate-500 flex items-center gap-2">
+                          Score:
+                          <span className={`px-2 py-0.5 rounded text-xs font-bold ${badgeColor}`}>
+                            {result.matchScore}%
+                          </span>
                         </CardDescription>
                       </div>
                     </div>
-                    <div className="w-32 hidden sm:block">
-                      <Progress value={result.matchScore} className="h-2" />
+                    <div className="w-full sm:w-32 hidden sm:block">
+                      <Progress 
+                        value={result.matchScore} 
+                        className="h-2 bg-slate-100" 
+                        indicatorClassName={isPassed ? (isExceptional ? 'bg-emerald-500' : 'bg-amber-500') : 'bg-slate-400'} 
+                      />
                     </div>
                   </div>
                 </AccordionTrigger>
-                <AccordionContent className="px-6 pb-6 pt-2">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <h4 className="flex items-center text-sm font-semibold text-green-700 mb-3">
+                <AccordionContent className="px-6 pb-6 pt-0">
+                  <div className="grid md:grid-cols-2 gap-6 mt-4">
+                    <div className="bg-emerald-50/30 rounded-xl p-4 border border-emerald-50">
+                      <h4 className="flex items-center text-sm font-bold text-emerald-700 mb-3">
                         <CheckCircle2 className="mr-2 h-4 w-4" />
                         Key Strengths
                       </h4>
                       <ul className="space-y-2">
                         {result.strengths.map((strength: string, i: number) => (
-                          <motion.li 
-                            key={i} 
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.3, delay: 0.2 + (i * 0.1) }}
-                            className="flex items-start text-sm text-gray-700"
-                          >
-                            <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-green-500 flex-shrink-0" />
+                          <li key={i} className="flex items-start text-sm text-slate-600">
+                            <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 flex-shrink-0" />
                             {strength}
-                          </motion.li>
+                          </li>
                         ))}
                       </ul>
                     </div>
-                    <div>
-                      <h4 className="flex items-center text-sm font-semibold text-amber-700 mb-3">
+                    <div className="bg-amber-50/30 rounded-xl p-4 border border-amber-50">
+                      <h4 className="flex items-center text-sm font-bold text-amber-700 mb-3">
                         <AlertCircle className="mr-2 h-4 w-4" />
                         Gaps & Risks
                       </h4>
                       <ul className="space-y-2">
                         {result.gaps.map((gap: string, i: number) => (
-                          <motion.li 
-                            key={i} 
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.3, delay: 0.2 + (i * 0.1) }}
-                            className="flex items-start text-sm text-gray-700"
-                          >
-                            <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                          <li key={i} className="flex items-start text-sm text-slate-600">
+                            <span className="mr-2 mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-400 flex-shrink-0" />
                             {gap}
-                          </motion.li>
+                          </li>
                         ))}
                       </ul>
                     </div>
                   </div>
 
-                <div className="mt-6 pt-6 border-t">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-2">AI Recommendation</h4>
-                  <p className="text-sm text-gray-700 leading-relaxed bg-blue-50/50 p-4 rounded-lg border border-blue-100">
+                <div className="mt-5 pt-5 border-t border-slate-100">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">AI Recommendation</h4>
+                  <p className="text-sm text-slate-700 leading-relaxed bg-slate-50 p-4 rounded-xl border border-slate-100">
                     {result.finalRecommendation}
                   </p>
                 </div>
 
                 {result.emailDraft && (
-                  <div className="mt-6 pt-6 border-t">
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-semibold text-gray-900">
-                        {result.matchScore >= (job.passingScore || 70) ? 'Interview Invitation Email Draft' : 'Rejection Email Draft'}
+                  <div className="mt-5 pt-5 border-t border-slate-100">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-3 gap-4">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                        {isPassed ? 'Interview Invitation Email' : 'Rejection Email'}
                       </h4>
                       <Button 
                         size="sm" 
                         onClick={() => handleSendEmail(result.applicantId, result.applicant?.email, result.emailDraft, result.matchScore)}
                         disabled={sendingEmails[result.applicantId] || sentEmails[result.applicantId] || !result.applicant?.email}
-                        className={sentEmails[result.applicantId] ? "bg-green-600 hover:bg-green-700" : ""}
+                        className={cn(
+                          "rounded-md font-semibold px-4 transition-all",
+                          sentEmails[result.applicantId] ? "bg-emerald-600 hover:bg-emerald-700" : ""
+                        )}
                       >
                         {sendingEmails[result.applicantId] ? (
                           <div className="flex items-center">
@@ -302,15 +323,15 @@ export default function ScreeningPage() {
                         ) : (
                           <>
                             <Send className="mr-2 h-4 w-4" />
-                            Send Email
+                            Send Draft
                           </>
                         )}
                       </Button>
                     </div>
                     {!result.applicant?.email && (
-                      <p className="text-xs text-red-500 mb-2">Cannot send: No email address found for this applicant.</p>
+                      <p className="text-xs text-rose-500 mb-2 font-medium">Cannot send: No email address found for this candidate.</p>
                     )}
-                    <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 whitespace-pre-wrap border border-gray-200">
+                    <div className="bg-white p-4 rounded-xl text-sm text-slate-700 whitespace-pre-wrap border border-slate-200">
                       {result.emailDraft}
                     </div>
                   </div>
@@ -318,12 +339,12 @@ export default function ScreeningPage() {
 
                 <div className="mt-6">
                   <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="profile">
-                      <AccordionTrigger className="text-sm font-medium text-gray-700 hover:text-gray-900">
+                    <AccordionItem value="profile" className="border-0 bg-slate-50 rounded-xl overflow-hidden">
+                      <AccordionTrigger className="text-xs uppercase font-bold tracking-wider text-slate-500 hover:text-slate-700 hover:no-underline px-4 py-3">
                         View Original Profile Data
                       </AccordionTrigger>
-                      <AccordionContent>
-                        <div className="bg-gray-50 p-4 rounded-md text-xs font-mono text-gray-600 overflow-auto max-h-64 whitespace-pre-wrap">
+                      <AccordionContent className="px-4 pb-4">
+                        <div className="bg-slate-800 p-3 rounded-lg text-xs font-mono text-slate-300 overflow-auto max-h-64 whitespace-pre-wrap">
                           {JSON.stringify(result.applicant?.profileData, null, 2)}
                         </div>
                       </AccordionContent>
@@ -334,7 +355,7 @@ export default function ScreeningPage() {
             </AccordionItem>
           </Card>
           </motion.div>
-        ))}
+        )})}
       </Accordion>
     </div>
   );

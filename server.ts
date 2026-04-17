@@ -9,7 +9,6 @@ import { createRequire } from 'module';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
-import { GoogleGenAI } from '@google/genai';
 
 let requireFunc: NodeRequire;
 if (typeof require !== 'undefined') {
@@ -66,96 +65,8 @@ const upload = multer({
   }
 });
 
-// Initialize Gemini API
-const genAI = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || '' });
-
-async function parseResumeWithGemini(text: string) {
-  try {
-    const model = genAI.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `
-        Extract the following information from this resume text according to the Talent Profile Schema Specification.
-        
-        Schema:
-        {
-          "firstName": "string",
-          "lastName": "string",
-          "email": "string",
-          "headline": "string (Short professional summary)",
-          "bio": "string (Detailed professional biography)",
-          "location": "string (City, Country)",
-          "skills": [
-            { "name": "string", "level": "Beginner | Intermediate | Advanced | Expert", "yearsOfExperience": number }
-          ],
-          "languages": [
-            { "name": "string", "proficiency": "Basic | Conversational | Fluent | Native" }
-          ],
-          "experience": [
-            {
-              "company": "string",
-              "role": "string",
-              "startDate": "YYYY-MM",
-              "endDate": "YYYY-MM | Present",
-              "description": "string",
-              "technologies": ["string"],
-              "isCurrent": boolean
-            }
-          ],
-          "education": [
-            {
-              "institution": "string",
-              "degree": "string",
-              "fieldOfStudy": "string",
-              "startYear": number,
-              "endYear": number
-            }
-          ],
-          "certifications": [
-            { "name": "string", "issuer": "string", "issueDate": "YYYY-MM" }
-          ],
-          "projects": [
-            {
-              "name": "string",
-              "description": "string",
-              "technologies": ["string"],
-              "role": "string",
-              "link": "string",
-              "startDate": "YYYY-MM",
-              "endDate": "YYYY-MM"
-            }
-          ],
-          "availability": {
-            "status": "Available | Open to Opportunities | Not Available",
-            "type": "Full-time | Part-time | Contract",
-            "startDate": "YYYY-MM-DD"
-          },
-          "socialLinks": {
-            "linkedin": "string",
-            "github": "string",
-            "portfolio": "string"
-          }
-        }
-
-        Resume Text:
-        ${text.substring(0, 15000)}
-
-        Return ONLY the JSON object. Ensure all fields are extracted accurately. If a field is not found, use null or an empty array as appropriate.
-      `,
-      config: {
-        responseMimeType: 'application/json'
-      }
-    });
-
-    const response = await model;
-    return JSON.parse(response.text || '{}');
-  } catch (error) {
-    console.error('Gemini parsing error:', error);
-    return {};
-  }
-}
-
 // --- Helper for Firestore ---
-const isFirestore = (db: any) => typeof db.collection === 'function' || db.type === 'firestore';
+const isFirestore = (db: any) => typeof db.collection === 'function' || db.type === 'firestore' || db?.type === 'document' || db?.constructor?.name === 'Firestore' || (db && db._authCredentials);
 
 // --- API Routes ---
 
@@ -457,19 +368,16 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
           const emailMatch = text.match(emailRegex);
           const email = emailMatch ? emailMatch[0] : '';
 
-          // Use Gemini to extract structured data
-          const extractedData = await parseResumeWithGemini(text);
-
           newApplicants.push({
             id: Date.now().toString() + Math.random().toString(36).substring(7),
-            name: extractedData.name || name,
-            email: extractedData.email || email,
-            phone: extractedData.phone || '',
-            education: extractedData.education || '',
-            experience: extractedData.experience || '',
-            skills: extractedData.skills || [],
+            name: name,
+            email: email,
+            phone: '',
+            education: '',
+            experience: '',
+            skills: [],
             jobId: jobId || null,
-            profileData: { resumeText: text, ...extractedData },
+            profileData: { resumeText: text },
             source: 'PDF',
             fileName: file.originalname,
             createdAt: new Date().toISOString()

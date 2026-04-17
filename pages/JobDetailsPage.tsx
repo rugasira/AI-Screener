@@ -60,6 +60,7 @@ import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { GoogleGenAI } from '@google/genai';
+import { screenApplicants } from '@/lib/gemini';
 import { collection, getDocs, doc, getDoc, addDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -296,57 +297,7 @@ export default function JobDetailsPage() {
     try {
       const applicantsToScreen = applicants.filter(a => selectedApplicants.includes(a.id));
       
-      const prompt = `
-        You are an expert AI recruiter. Evaluate the following candidates against the job description using their structured Talent Profile data.
-        
-        Job Details:
-        Title: ${job.title}
-        Requirements: ${job.requirements}
-        Skills: ${job.skills}
-        Experience: ${job.experience}
-        Passing Score: ${job.passingScore || 70} / 100
-
-        Evaluation Criteria:
-        1. Required Fields Check: Ensure the candidate has provided First Name, Last Name, Email, Headline, Location, Skills, Experience, Education, Projects, and Availability.
-        2. Skill Match: Compare candidate's skills (name, level, years) against job requirements.
-        3. Experience Relevance: Evaluate if the work history and projects align with the role.
-        4. Overall Fit: Assess the headline, bio, and certifications.
-
-        Candidates Data (JSON):
-        ${JSON.stringify(applicantsToScreen.map(a => ({ 
-          applicantId: a.id, 
-          profile: a.profileData 
-        })), null, 2)}
-
-        Analyze all applicants against the job criteria. Score (0-100) and rank them.
-        A candidate passes if their matchScore >= ${job.passingScore || 70}.
-        
-        Return a JSON array of results in this format:
-        [
-          {
-            "applicantId": "string",
-            "rank": number,
-            "matchScore": number,
-            "strengths": ["string"],
-            "gaps": ["string"],
-            "finalRecommendation": "string",
-            "emailDraft": "string (Professional invitation or polite rejection based on score)"
-          }
-        ]
-        Only return the JSON array.
-      `;
-
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt,
-        config: {
-          responseMimeType: 'application/json',
-        }
-      });
-
-      const resultText = response.text || '';
-      const screeningResults = JSON.parse(resultText);
+      const screeningResults = await screenApplicants(job, applicantsToScreen);
 
       const res = await fetch('/api/screenings', {
         method: 'POST',
@@ -361,9 +312,9 @@ export default function JobDetailsPage() {
       } else {
         toast.error('Screening failed to save');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error('Screening failed');
+      toast.error(error.message || 'Screening failed');
     } finally {
       setScreeningLoading(false);
     }
@@ -407,8 +358,8 @@ export default function JobDetailsPage() {
           <AlertCircle className="h-10 w-10 text-destructive" />
         </div>
         <h2 className="text-2xl font-black">Job not found</h2>
-        <Link to="/admin">
-          <Button className="mt-6">Back to Dashboard</Button>
+        <Link to="/admin/jobs">
+          <Button className="mt-6">Back to Jobs</Button>
         </Link>
       </div>
     );
@@ -418,7 +369,7 @@ export default function JobDetailsPage() {
     <div className="space-y-8 max-w-7xl mx-auto pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center space-x-5">
-          <Link to="/admin">
+          <Link to="/admin/jobs">
             <Button variant="outline" size="icon" className="rounded-xl border-border hover:bg-white hover:shadow-md transition-all h-12 w-12">
               <ArrowLeft className="h-6 w-6" />
             </Button>
