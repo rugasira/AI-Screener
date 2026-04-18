@@ -9,6 +9,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface ScreeningProgressModalProps {
   isOpen: boolean;
   candidateCount: number;
+  onClose?: () => void;
+  progress?: number;
+  message?: string;
 }
 
 const steps = [
@@ -19,25 +22,30 @@ const steps = [
   { icon: CheckCircle2, text: "Finalizing screening reports..." }
 ];
 
-export function ScreeningProgressModal({ isOpen, candidateCount }: ScreeningProgressModalProps) {
-  const [currentStep, setCurrentStep] = useState(0);
+export function ScreeningProgressModal({ isOpen, candidateCount, onClose, progress, message }: ScreeningProgressModalProps) {
+  const [internalStep, setInternalStep] = useState(0);
 
   useEffect(() => {
     if (!isOpen) {
-      setCurrentStep(0);
+      setInternalStep(0);
       return;
     }
 
-    const interval = setInterval(() => {
-      setCurrentStep((prev) => (prev + 1) % steps.length);
-    }, 3000);
+    if (progress === undefined) {
+      const interval = setInterval(() => {
+        setInternalStep((prev) => (prev + 1) % steps.length);
+      }, 3000);
+      return () => clearInterval(interval);
+    }
+  }, [isOpen, progress]);
 
-    return () => clearInterval(interval);
-  }, [isOpen]);
+  const currentProgress = progress !== undefined ? progress : ((internalStep + 1) / steps.length) * 100;
+  const currentStepIndex = progress !== undefined ? Math.min(Math.floor(progress / 20), steps.length - 1) : internalStep;
+  const currentText = message || steps[currentStepIndex].text;
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-2xl p-0 overflow-hidden bg-white" showCloseButton={false}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if(!open && onClose) onClose(); }}>
+      <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-2xl p-0 overflow-hidden bg-white">
         <div className="bg-primary p-10 text-white relative overflow-hidden">
           {/* Animated background elements */}
           <motion.div 
@@ -75,13 +83,13 @@ export function ScreeningProgressModal({ isOpen, candidateCount }: ScreeningProg
               <div className="absolute inset-0 flex items-center justify-center">
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={currentStep}
+                    key={currentStepIndex}
                     initial={{ opacity: 0, scale: 0.5, rotate: -20 }}
                     animate={{ opacity: 1, scale: 1, rotate: 0 }}
                     exit={{ opacity: 0, scale: 1.5, rotate: 20 }}
                     transition={{ duration: 0.5 }}
                   >
-                    {React.createElement(steps[currentStep].icon, { className: "h-8 w-8 text-primary" })}
+                    {React.createElement(steps[currentStepIndex].icon, { className: "h-8 w-8 text-white" })}
                   </motion.div>
                 </AnimatePresence>
               </div>
@@ -90,13 +98,13 @@ export function ScreeningProgressModal({ isOpen, candidateCount }: ScreeningProg
             <div className="text-center h-12 flex items-center justify-center px-4">
               <AnimatePresence mode="wait">
                 <motion.p
-                  key={currentStep}
+                  key={currentStepIndex}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -10 }}
                   className="text-slate-600 font-bold text-lg leading-tight"
                 >
-                  {steps[currentStep].text}
+                  {currentText}
                 </motion.p>
               </AnimatePresence>
             </div>
@@ -105,13 +113,13 @@ export function ScreeningProgressModal({ isOpen, candidateCount }: ScreeningProg
           <div className="space-y-3">
             <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400 px-1">
               <span>Progress</span>
-              <span>{Math.round(((currentStep + 1) / steps.length) * 100)}%</span>
+              <span>{Math.round(currentProgress)}%</span>
             </div>
             <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
               <motion.div 
                 className="h-full bg-primary"
                 initial={{ width: "0%" }}
-                animate={{ width: `${((currentStep + 1) / steps.length) * 100}%` }}
+                animate={{ width: `${currentProgress}%` }}
                 transition={{ duration: 0.5 }}
               />
             </div>

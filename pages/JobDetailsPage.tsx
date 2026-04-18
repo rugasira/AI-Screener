@@ -18,7 +18,8 @@ import {
   ChevronRight,
   Target,
   FileSearch,
-  Sparkles
+  Sparkles,
+  Phone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -90,6 +91,8 @@ export default function JobDetailsPage() {
   const [screenings, setScreenings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [screeningLoading, setScreeningLoading] = useState(false);
+  const [screeningProgress, setScreeningProgress] = useState(0);
+  const [screeningMessage, setScreeningMessage] = useState('');
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [screeningMap, setScreeningMap] = useState<Record<string, any>>({});
   const [selectedApplicants, setSelectedApplicants] = useState<string[]>([]);
@@ -209,7 +212,16 @@ export default function JobDetailsPage() {
     if (pendingFiles.length === 0) return;
 
     setUploading(true);
-    toast.loading(`Uploading ${pendingFiles.length} resumes...`, { id: 'upload' });
+    setIsUploadOpen(false); // Move to background
+    const taskName = `Uploading ${pendingFiles.length} resumes - ${job.title}`;
+    
+    // Add to active tasks (simulated persistent task)
+    const activeTasks = JSON.parse(localStorage.getItem('activeTasks') || '[]');
+    const taskId = Date.now();
+    activeTasks.push({ id: taskId, name: taskName, progress: 0, type: 'upload' });
+    localStorage.setItem('activeTasks', JSON.stringify(activeTasks));
+
+    toast.info(`Upload started: ${taskName}. You can continue working.`, { id: `upload-${taskId}` });
     
     const formData = new FormData();
     for (let i = 0; i < pendingFiles.length; i++) {
@@ -224,21 +236,38 @@ export default function JobDetailsPage() {
       });
 
       if (res.ok) {
-        toast.success(`Successfully uploaded ${pendingFiles.length} resumes`, { id: 'upload' });
-        setIsUploadOpen(false);
-        setPendingFiles([]);
+        toast.success(`Upload complete: ${pendingFiles.length} resumes added to ${job.title}`, { 
+          id: `upload-${taskId}`,
+          duration: 5000,
+          description: "Candidate screening can now be initiated."
+        });
         fetchApplicants();
       } else {
         const error = await res.json();
-        toast.error(error.message || 'Failed to upload resumes', { id: 'upload' });
+        toast.error(`Upload failed: ${error.message}`, { id: `upload-${taskId}` });
       }
     } catch (error) {
       console.error(error);
-      toast.error('Failed to upload resumes', { id: 'upload' });
+      toast.error('Failed to upload resumes', { id: `upload-${taskId}` });
     } finally {
       setUploading(false);
+      setPendingFiles([]);
       if (fileInputRef.current) fileInputRef.current.value = '';
       if (folderInputRef.current) folderInputRef.current.value = '';
+      
+      // Remove from active tasks
+      const updatedTasks = JSON.parse(localStorage.getItem('activeTasks') || '[]').filter((t: any) => t.id !== taskId);
+      localStorage.setItem('activeTasks', JSON.stringify(updatedTasks));
+    }
+  };
+
+  const handleDeleteScreening = async (screeningId: string) => {
+    try {
+      await deleteDoc(doc(db, 'screenings', screeningId));
+      setScreenings(prev => prev.filter(s => s.id !== screeningId));
+      toast.success('Screening history removed');
+    } catch (error) {
+      toast.error('Failed to remove screening history');
     }
   };
 
@@ -294,10 +323,46 @@ export default function JobDetailsPage() {
     }
 
     setScreeningLoading(true);
+    setScreeningProgress(5);
+    setScreeningMessage('Preparing evaluation pipeline...');
+    
+    const taskId = Date.now();
+    const taskName = `Screening ${selectedApplicants.length} candidates - ${job.title}`;
+    const activeTasks = JSON.parse(localStorage.getItem('activeTasks') || '[]');
+    activeTasks.push({ id: taskId, name: taskName, progress: 5, type: 'screening' });
+    localStorage.setItem('activeTasks', JSON.stringify(activeTasks));
+
+    toast.info(`Screening started for ${selectedApplicants.length} candidates.`, { id: `screen-${taskId}` });
+
     try {
       const applicantsToScreen = applicants.filter(a => selectedApplicants.includes(a.id));
       
+      // Live progress simulation through batching or step updates
+      setScreeningProgress(20);
+      setScreeningMessage('Extracting and analyzing professional data...');
+      
+      // Update global task progress
+      const updateGlobalProgress = (p: number, msg: string) => {
+        const tasks = JSON.parse(localStorage.getItem('activeTasks') || '[]');
+        const idx = tasks.findIndex((t: any) => t.id === taskId);
+        if (idx !== -1) {
+          tasks[idx].progress = p;
+          tasks[idx].message = msg;
+          localStorage.setItem('activeTasks', JSON.stringify(tasks));
+        }
+      };
+
+      // In a real app, you might screen in batches to show real progress
+      await new Promise(r => setTimeout(r, 2000));
+      setScreeningProgress(45);
+      setScreeningMessage('Comparing expertise against role requirements...');
+      updateGlobalProgress(45, 'Comparing expertise...');
+
       const screeningResults = await screenApplicants(job, applicantsToScreen);
+
+      setScreeningProgress(85);
+      setScreeningMessage('Finalizing evaluation reports...');
+      updateGlobalProgress(85, 'Finalizing reports...');
 
       const res = await fetch('/api/screenings', {
         method: 'POST',
@@ -307,16 +372,31 @@ export default function JobDetailsPage() {
       
       if (res.ok) {
         const savedScreening = await res.json();
-        toast.success('Screening completed successfully');
-        navigate(`/admin/screening/${id}/${savedScreening.id}`);
+        setScreeningProgress(100);
+        setScreeningMessage('Evaluation complete!');
+        updateGlobalProgress(100, 'Complete!');
+        
+        toast.success(`Screening Complete! ${selectedApplicants.length} candidates evaluated.`, { 
+          id: `screen-${taskId}`,
+          duration: 6000,
+          description: "View results in the applicant pool or screening history."
+        });
+        
+        fetchJobDetails(); // Refresh to show scores
+        setSelectedApplicants([]);
       } else {
-        toast.error('Screening failed to save');
+        toast.error('Screening failed to save', { id: `screen-${taskId}` });
       }
     } catch (error: any) {
       console.error(error);
-      toast.error(error.message || 'Screening failed');
+      toast.error(error.message || 'Screening failed', { id: `screen-${taskId}` });
     } finally {
       setScreeningLoading(false);
+      // Remove from active tasks after a delay
+      setTimeout(() => {
+        const updatedTasks = JSON.parse(localStorage.getItem('activeTasks') || '[]').filter((t: any) => t.id !== taskId);
+        localStorage.setItem('activeTasks', JSON.stringify(updatedTasks));
+      }, 2000);
     }
   };
 
@@ -381,133 +461,31 @@ export default function JobDetailsPage() {
                 {job.type}
               </span>
             </div>
-            <p className="text-muted-foreground mt-1 flex items-center gap-2 font-medium">
-              <Calendar className="h-4 w-4 text-primary" />
-              Created on {format(new Date(job.createdAt), 'MMMM d, yyyy')}
+            <p className="text-muted-foreground mt-1 flex flex-wrap items-center gap-4 font-bold">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="h-4 w-4 text-primary" />
+                Posted {format(new Date(job.createdAt), 'MMM d, yyyy')}
+              </span>
+              <span className="flex items-center gap-1.5 focus:text-primary">
+                <Target className="h-4 w-4 text-primary" />
+                {job.location}
+              </span>
+              {job.salaryRange && (
+                <span className="flex items-center gap-1.5 text-emerald-600">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  {job.salaryRange}
+                </span>
+              )}
             </p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            className="hidden" 
-            multiple 
-            accept=".pdf,.docx,.doc" 
-            onChange={(e) => handleFileUpload(e)}
-          />
-          <input 
-            type="file" 
-            ref={folderInputRef} 
-            className="hidden" 
-            webkitdirectory="" 
-            directory="" 
-            onChange={(e) => handleFileUpload(e, true)}
-          />
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="border-border h-11 px-5 font-bold rounded-xl">
-            <FileText className="mr-2 h-5 w-5 text-primary" />
-            Upload Resumes
-          </Button>
-          <Button variant="outline" onClick={() => folderInputRef.current?.click()} disabled={uploading} className="border-border h-11 px-5 font-bold rounded-xl">
-            <FolderOpen className="mr-2 h-5 w-5 text-primary" />
-            Upload Folder
-          </Button>
-          <Button variant="outline" onClick={() => openPicker(handleDriveSelect)} disabled={uploading} className="border-border h-11 px-5 font-bold rounded-xl">
-            <svg className="mr-2 h-5 w-5 text-primary" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12.5,2L6.5,12.2L3.3,18h12l3-5.2L12.5,2z M10,12.2l2.5-4.3l2.5,4.3H10z M18.5,18l-3-5.2l3-5.2l3,5.2L18.5,18z M15.3,18H3.3l3-5.2h12L15.3,18z"/>
-            </svg>
-            From Drive
-          </Button>
-
-          <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if(!open) setPendingFiles([]); }}>
-            <DialogContent className="sm:max-w-[500px] rounded-2xl border-0 shadow-2xl p-0 overflow-hidden">
-              <div className="bg-primary p-8 text-white">
-                <DialogTitle className="text-3xl font-black tracking-tight">Upload Resumes</DialogTitle>
-                <DialogDescription className="text-primary-foreground/80 font-medium mt-2">
-                  Review the selected files before uploading them for this job.
-                </DialogDescription>
-              </div>
-              <div className="p-8 space-y-6">
-                <div className="space-y-4">
-                  <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 max-h-[200px] overflow-y-auto space-y-2">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-black uppercase tracking-widest text-slate-400">{pendingFiles.length} Files Selected</span>
-                      <Button variant="ghost" size="sm" onClick={() => setPendingFiles([])} className="h-7 text-[10px] font-black uppercase tracking-widest text-destructive hover:bg-destructive/5">Clear</Button>
-                    </div>
-                    {pendingFiles.slice(0, 5).map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-sm font-bold text-slate-600 bg-white p-2 rounded-lg border border-slate-100">
-                        <FileText className="h-4 w-4 text-primary" />
-                        <span className="truncate">{file.name}</span>
-                      </div>
-                    ))}
-                    {pendingFiles.length > 5 && (
-                      <p className="text-[10px] font-bold text-slate-400 text-center py-1">And {pendingFiles.length - 5} more files...</p>
-                    )}
-                  </div>
-                  <Button 
-                    className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20"
-                    onClick={confirmUpload}
-                    disabled={uploading}
-                  >
-                    {uploading ? (
-                      <div className="flex items-center gap-2">
-                        <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Uploading...
-                      </div>
-                    ) : (
-                      'Confirm & Upload Resumes'
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <DeleteConfirmationDialog
-            isOpen={isDeleteDialogOpen}
-            onOpenChange={setIsDeleteDialogOpen}
-            onConfirm={confirmDeleteApplicant}
-            title="Remove Applicant"
-            description="Are you sure you want to remove this applicant? This action cannot be undone."
-            isLoading={isDeleting}
-          />
-
-          <DeleteConfirmationDialog
-            isOpen={isDeleteAllDialogOpen}
-            onOpenChange={setIsDeleteAllDialogOpen}
-            onConfirm={confirmDeleteAllApplicants}
-            title="Remove All Applicants"
-            description="Are you sure you want to remove ALL applicants for this job? This action cannot be undone."
-            isLoading={isDeleting}
-          />
-
-          <ScreeningProgressModal 
-            isOpen={screeningLoading} 
-            candidateCount={selectedApplicants.length} 
-          />
-
-          <Button 
-            onClick={handleScreen} 
-            disabled={screeningLoading || selectedApplicants.length === 0} 
-            className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-11 px-6 font-bold rounded-xl"
-          >
-            {screeningLoading ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Screening...
-              </div>
-            ) : (
-              <>
-                <Sparkles className="mr-2 h-5 w-5" />
-                Run AI Screening
-              </>
-            )}
-          </Button>
+          {/* Action buttons moved to applicant section */}
         </div>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-3">
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-3 space-y-8">
           <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
             <div className="h-2 w-full bg-primary" />
             <CardHeader className="pb-2">
@@ -517,35 +495,49 @@ export default function JobDetailsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-8 pt-4">
-              <div className="bg-muted/30 p-6 rounded-2xl border border-border/50">
-                <h3 className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em] mb-4">Key Requirements</h3>
-                <p className="text-foreground leading-relaxed whitespace-pre-wrap font-medium">{job.requirements}</p>
-              </div>
-              
-              <div className="grid md:grid-cols-2 gap-8">
-                <div className="space-y-4">
-                  <h3 className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em]">Required Skills</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {job.skills ? job.skills.split(',').map((skill: string, i: number) => (
-                      <span key={i} className="bg-primary/5 text-primary text-[10px] font-black px-4 py-1.5 rounded-xl border border-primary/10 uppercase tracking-wider">
-                        {skill.trim()}
-                      </span>
-                    )) : <span className="text-muted-foreground italic">No skills specified</span>}
+              <div className="bg-muted/30 p-8 rounded-3xl border border-border/50 space-y-8">
+                <div>
+                  <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                    Key Requirements
+                  </h3>
+                  <p className="text-foreground leading-relaxed whitespace-pre-wrap font-medium text-lg">{job.requirements}</p>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-8 pt-6 border-t border-border/40">
+                  <div className="space-y-1">
+                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Experience</h4>
+                    <p className="text-xl font-black text-foreground">{job.experience}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Pass Score</h4>
+                    <p className="text-xl font-black text-primary flex items-center gap-1.5">
+                      <Target className="h-5 w-5" />
+                      {job.passingScore || 70}%
+                    </p>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Location</h4>
+                    <p className="text-xl font-black text-foreground">{job.location}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">Comp Range</h4>
+                    <p className="text-xl font-black text-emerald-600">{job.salaryRange || 'N/A'}</p>
                   </div>
                 </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="bg-muted/30 p-4 rounded-2xl border border-border/50">
-                    <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-1">Experience</h3>
-                    <p className="text-lg font-black text-foreground">{job.experience}</p>
-                  </div>
-                  <div className="bg-muted/30 p-4 rounded-2xl border border-border/50">
-                    <h3 className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-1">Pass Score</h3>
-                    <div className="flex items-center gap-2">
-                      <Target className="h-5 w-5 text-primary" />
-                      <p className="text-lg font-black text-foreground">{job.passingScore || 70}%</p>
-                    </div>
-                  </div>
+              </div>
+              
+              <div className="space-y-4">
+                <h3 className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em] flex items-center gap-2">
+                  <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground/30" />
+                  Required Expertise
+                </h3>
+                <div className="flex flex-wrap gap-2.5">
+                  {job.skills ? job.skills.split(',').map((skill: string, i: number) => (
+                    <span key={i} className="bg-white text-slate-700 text-[11px] font-bold px-5 py-2 rounded-xl border border-slate-200 shadow-sm uppercase tracking-wider hover:border-primary/30 transition-colors cursor-default">
+                      {skill.trim()}
+                    </span>
+                  )) : <span className="text-muted-foreground italic">No skills specified</span>}
                 </div>
               </div>
             </CardContent>
@@ -561,7 +553,51 @@ export default function JobDetailsPage() {
                 </CardTitle>
                 <CardDescription className="font-medium">Select candidates to initiate AI evaluation.</CardDescription>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  className="hidden" 
+                  multiple 
+                  accept=".pdf,.docx,.doc" 
+                  onChange={(e) => handleFileUpload(e)}
+                />
+                <input 
+                  type="file" 
+                  ref={folderInputRef} 
+                  className="hidden" 
+                  webkitdirectory="" 
+                  directory="" 
+                  onChange={(e) => handleFileUpload(e, true)}
+                />
+                
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="h-9 font-bold rounded-lg px-3">
+                  <FileText className="mr-2 h-4 w-4 text-primary" />
+                  Upload
+                </Button>
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={
+                    <Button variant="outline" size="sm" className="h-9 font-bold rounded-lg px-2">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  } />
+                  <DropdownMenuContent align="end" className="w-48 rounded-xl font-bold">
+                    <DropdownMenuItem onClick={() => folderInputRef.current?.click()} className="cursor-pointer">
+                      <FolderOpen className="mr-2 h-4 w-4 text-primary" />
+                      Upload Folder
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => openPicker(handleDriveSelect)} className="cursor-pointer">
+                      <svg className="mr-2 h-4 w-4 text-primary" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12.5,2L6.5,12.2L3.3,18h12l3-5.2L12.5,2z M10,12.2l2.5-4.3l2.5,4.3H10z M18.5,18l-3-5.2l3-5.2l3,5.2L18.5,18z M15.3,18H3.3l3-5.2h12L15.3,18z"/>
+                      </svg>
+                      From Drive
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                <div className="w-[1px] h-6 bg-border mx-1" />
+
                 <div className="relative w-full md:w-64">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input 
@@ -571,14 +607,68 @@ export default function JobDetailsPage() {
                     className="pl-9 h-10 border-border rounded-xl shadow-sm"
                   />
                 </div>
+
+                <Button 
+                  onClick={handleScreen} 
+                  disabled={screeningLoading || selectedApplicants.length === 0} 
+                  size="sm"
+                  className="bg-primary hover:bg-primary/90 shadow-md shadow-primary/10 h-10 px-4 font-bold rounded-xl ml-auto"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  AI Screening
+                </Button>
+
                 {applicants.length > 0 && (
-                  <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 rounded-xl h-10 w-10" onClick={handleDeleteAllApplicants}>
+                  <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 rounded-xl h-10 w-10 ml-2" onClick={handleDeleteAllApplicants}>
                     <Trash2 className="h-5 w-5" />
                   </Button>
                 )}
               </div>
             </CardHeader>
             <CardContent>
+              <ScreeningProgressModal 
+                isOpen={screeningLoading} 
+                candidateCount={selectedApplicants.length} 
+                onClose={() => setScreeningLoading(false)}
+                progress={screeningProgress}
+                message={screeningMessage}
+              />
+              <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if(!open) setPendingFiles([]); }}>
+                <DialogContent className="sm:max-w-[500px] rounded-2xl border-0 shadow-2xl p-0 overflow-hidden">
+                  <div className="bg-primary p-8 text-white">
+                    <DialogTitle className="text-3xl font-black tracking-tight">Process Resumes</DialogTitle>
+                    <DialogDescription className="text-primary-foreground/80 font-medium mt-2">
+                      Review {pendingFiles.length} files.
+                    </DialogDescription>
+                  </div>
+                  <div className="p-8 space-y-6">
+                    <Button 
+                      className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20"
+                      onClick={confirmUpload}
+                    >
+                      Process & Upload
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+              
+              <DeleteConfirmationDialog
+                isOpen={isDeleteDialogOpen}
+                onOpenChange={setIsDeleteDialogOpen}
+                onConfirm={confirmDeleteApplicant}
+                title="Remove Applicant"
+                description="Are you sure you want to remove this applicant? This action cannot be undone."
+                isLoading={isDeleting}
+              />
+
+              <DeleteConfirmationDialog
+                isOpen={isDeleteAllDialogOpen}
+                onOpenChange={setIsDeleteAllDialogOpen}
+                onConfirm={confirmDeleteAllApplicants}
+                title="Remove All Applicants"
+                description="Are you sure you want to remove ALL applicants for this job? This action cannot be undone."
+                isLoading={isDeleting}
+              />
               <div className="rounded-2xl border border-border overflow-hidden shadow-sm">
                 <Table>
                   <TableHeader className="bg-muted/50">
@@ -592,7 +682,7 @@ export default function JobDetailsPage() {
                         />
                       </TableHead>
                       <TableHead className="font-black text-[10px] uppercase tracking-widest">Candidate</TableHead>
-                      <TableHead className="font-black text-[10px] uppercase tracking-widest">Education</TableHead>
+                      <TableHead className="font-black text-[10px] uppercase tracking-widest">Phone Number</TableHead>
                       <TableHead className="font-black text-[10px] uppercase tracking-widest">AI Status</TableHead>
                       <TableHead className="font-black text-[10px] uppercase tracking-widest">Source</TableHead>
                       <TableHead className="font-black text-[10px] uppercase tracking-widest">Applied On</TableHead>
@@ -646,13 +736,13 @@ export default function JobDetailsPage() {
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
-                                <GraduationCap className="h-4 w-4 text-primary/60" />
-                                <span className="truncate max-w-[180px]">{applicant.education || 'N/A'}</span>
+                                <Phone className="h-4 w-4 text-primary/60" />
+                                <span className="truncate max-w-[180px]">{applicant.phone || 'N/A'}</span>
                               </div>
                             </TableCell>
                             <TableCell>
                               {screeningMap[applicant.id] ? (
-                                <Link to={`/admin/screening/${id}/${screeningMap[applicant.id].screeningId}`} onClick={(e) => e.stopPropagation()}>
+                                <Link to={`/admin/screening/${id}/${screeningMap[applicant.id].screeningId}?applicantId=${applicant.id}`} onClick={(e) => e.stopPropagation()}>
                                   <div className="flex flex-col gap-1 group/status">
                                     <div className={cn(
                                       "inline-flex items-center w-fit gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
@@ -715,48 +805,55 @@ export default function JobDetailsPage() {
               </CardFooter>
             )}
           </Card>
-        </div>
 
-        <div className="space-y-8">
-          <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
+          <Card className="border-0 shadow-xl overflow-hidden rounded-2xl mt-8">
             <div className="h-2 w-full bg-primary" />
             <CardHeader>
               <CardTitle className="text-2xl font-black flex items-center gap-2">
                 <CheckCircle2 className="h-6 w-6 text-primary" />
                 Screening History
               </CardTitle>
-              <CardDescription className="font-medium">Review past AI evaluations.</CardDescription>
+              <CardDescription className="font-medium">Review past AI evaluations for this job role.</CardDescription>
             </CardHeader>
             <CardContent>
               {screenings.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border">
+                <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border text-center">
                   <AlertCircle className="h-10 w-10 mx-auto mb-3 opacity-20" />
                   <p className="text-sm font-bold">No screenings run yet.</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="grid md:grid-cols-2 gap-4">
                   {screenings.map((s) => (
-                    <Link 
-                      key={s.id} 
-                      to={`/admin/screening/${id}/${s.id}`}
-                      className="flex items-center justify-between p-5 border border-border rounded-2xl hover:bg-white hover:shadow-lg hover:border-primary/30 transition-all group relative overflow-hidden"
-                    >
-                      <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary transform -translate-x-full group-hover:translate-x-0 transition-transform" />
-                      <div className="flex items-center gap-4">
-                        <div className="bg-primary/10 p-2.5 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
-                          <CheckCircle2 className="h-5 w-5" />
+                    <div key={s.id} className="relative group">
+                      <Link 
+                        to={`/admin/screening/${id}/${s.id}`}
+                        className="flex items-center justify-between p-5 border border-border rounded-2xl hover:bg-white hover:shadow-lg hover:border-primary/30 transition-all overflow-hidden pr-12 w-full text-left"
+                      >
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary transform -translate-x-full group-hover:translate-x-0 transition-transform" />
+                        <div className="flex items-center gap-4">
+                          <div className="bg-primary/10 p-2.5 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
+                            <CheckCircle2 className="h-5 w-5" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-black text-foreground">
+                              {format(new Date(s.createdAt), 'MMM d, yyyy')}
+                            </p>
+                            <p className="text-xs font-bold text-muted-foreground">
+                              {s.results.length} candidates evaluated
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-black text-foreground">
-                            {format(new Date(s.createdAt), 'MMM d, yyyy')}
-                          </p>
-                          <p className="text-xs font-bold text-muted-foreground">
-                            {s.results.length} candidates evaluated
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
-                    </Link>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+                      </Link>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteScreening(s.id); }}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground h-8 w-8 hover:text-destructive hover:bg-destructive/10 rounded-lg group-hover:opacity-100 opacity-0 transition-opacity"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               )}

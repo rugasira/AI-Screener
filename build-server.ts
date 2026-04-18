@@ -5,8 +5,8 @@ esbuild.build({
   bundle: true,
   platform: 'node',
   target: 'node20',
-  outfile: 'dist/server.js',
-  format: 'esm',
+  outfile: 'dist/server.cjs',
+  format: 'cjs',
   external: [
     'express',
     'multer',
@@ -14,6 +14,7 @@ esbuild.build({
     'pdf-parse',
     '@google/genai',
     'dotenv',
-    'vite'
+    'vite',
+    'nodemailer'
   ],
 }).catch(() => process.exit(1));

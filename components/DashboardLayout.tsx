@@ -18,6 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useNavigate } from 'react-router-dom';
 
 const UmuravaLogo = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -28,9 +29,22 @@ const UmuravaLogo = ({ className }: { className?: string }) => (
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [globalSearch, setGlobalSearch] = useState('');
+
+  const handleGlobalSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (globalSearch.trim()) {
+      // Redirect to a specific page based on context or a general search page
+      // For now, let's just go to applicants and use the search query
+      navigate(`/admin/applicants?search=${encodeURIComponent(globalSearch)}`);
+      setGlobalSearch('');
+    }
+  };
 
   useEffect(() => {
     fetchNotifications();
@@ -87,22 +101,48 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex h-screen bg-[#f1f5f9] text-slate-900 overflow-hidden font-sans">
       {/* Sidebar (Desktop) */}
-      <aside className="hidden md:flex w-80 flex-col border-r border-slate-200 bg-white z-20 relative">
-        <div className="flex h-24 items-center px-8 border-b border-slate-100">
+      <aside className={cn(
+        "hidden md:flex flex-col border-r border-slate-200 bg-white z-20 relative transition-all duration-300 ease-in-out shadow-sm",
+        isSidebarCollapsed ? "w-24" : "w-80"
+      )}>
+        <div className={cn(
+          "flex h-24 items-center border-b border-slate-100 transition-all duration-300",
+          isSidebarCollapsed ? "justify-center px-0" : "px-8"
+        )}>
           <Link to="/admin" className="flex items-center gap-3 group">
-            <div className="bg-primary p-2.5 rounded-2xl shadow-xl shadow-primary/20 group-hover:scale-110 transition-transform duration-300">
+            <div className="bg-primary p-2.5 rounded-2xl shadow-xl shadow-primary/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
               <UmuravaLogo className="h-7 w-7 text-white" />
             </div>
-            <div className="flex flex-col">
-              <span className="font-black text-2xl tracking-tighter text-slate-900">Umurava</span>
-              <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary -mt-1">AI Screener</span>
-            </div>
+            {!isSidebarCollapsed && (
+              <motion.div 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="flex flex-col"
+              >
+                <span className="font-black text-2xl tracking-tighter text-slate-900">Umurava</span>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary -mt-1">AI Screener</span>
+              </motion.div>
+            )}
           </Link>
         </div>
+
+        {/* Collapse Toggle Button */}
+        <button 
+          onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          className="absolute -right-3.5 top-28 bg-white border border-slate-200 rounded-full h-7 w-7 flex items-center justify-center shadow-md hover:bg-slate-50 transition-colors z-30"
+        >
+          <ChevronRight className={cn(
+            "h-4 w-4 text-slate-400 transition-transform duration-300",
+            !isSidebarCollapsed && "rotate-180"
+          )} />
+        </button>
         
-        <div className="flex-1 overflow-y-auto py-10 px-6 space-y-10">
+        <div className={cn(
+          "flex-1 overflow-y-auto py-10 space-y-10",
+          isSidebarCollapsed ? "px-4" : "px-6"
+        )}>
           <div className="space-y-4">
-            <h3 className="px-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Management</h3>
+            {!isSidebarCollapsed && <h3 className="px-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Management</h3>}
             <nav className="space-y-2">
               {navigation.map((item) => {
                 const isActive = item.href === '/admin' 
@@ -113,20 +153,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     key={item.name}
                     to={item.href}
                     className={cn(
-                      'group relative flex items-center px-5 py-4 text-sm font-black rounded-2xl transition-all duration-300',
+                      'group relative flex items-center text-sm font-black rounded-2xl transition-all duration-300',
                       isActive
                         ? 'bg-slate-900 text-white shadow-2xl shadow-slate-900/20'
-                        : 'text-slate-500 hover:bg-primary/5 hover:text-primary'
+                        : 'text-slate-500 hover:bg-primary/5 hover:text-primary',
+                      isSidebarCollapsed ? "justify-center h-14 w-14 mx-auto px-0" : "px-5 py-4"
                     )}
                   >
                     <item.icon
                       className={cn(
-                        'mr-4 h-5 w-5 flex-shrink-0 transition-colors',
+                        'flex-shrink-0 transition-colors',
+                        isSidebarCollapsed ? "h-6 w-6 mr-0" : "mr-4 h-5 w-5",
                         isActive ? 'text-primary' : 'text-slate-400 group-hover:text-primary'
                       )}
                     />
-                    {item.name}
-                    {isActive && (
+                    {!isSidebarCollapsed && item.name}
+                    {isActive && !isSidebarCollapsed && (
                       <motion.div 
                         layoutId="active-nav-indicator"
                         className="absolute right-4 w-1.5 h-1.5 rounded-full bg-primary"
@@ -137,19 +179,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               })}
             </nav>
           </div>
-
-          <div className="space-y-4">
-            <h3 className="px-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">System</h3>
-            <nav className="space-y-2">
-              <div className="px-5 py-4 text-xs font-bold text-slate-400 bg-slate-50 rounded-2xl border border-slate-100 italic">
-                Admin-only portal. External access disabled.
-              </div>
-            </nav>
-          </div>
         </div>
 
-        <div className="p-8 border-t border-slate-100 bg-slate-50/50">
-          {user && (
+        <div className={cn(
+          "p-8 border-t border-slate-100 bg-slate-50/50 transition-all duration-300",
+          isSidebarCollapsed ? "px-4" : "p-8"
+        )}>
+          {user && !isSidebarCollapsed && (
             <div className="flex items-center gap-4 mb-8 px-2">
               <div className="relative group">
                 <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-400 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
@@ -163,18 +199,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow-sm" />
               </div>
               <div className="flex flex-col min-w-0">
-                <span className="text-sm font-black text-slate-900 truncate leading-tight">{user.displayName || 'Admin User'}</span>
+                <span className="text-sm font-black text-slate-900 truncate leading-tight">{user.displayName || 'Admin'}</span>
                 <span className="text-[10px] font-bold text-slate-400 truncate uppercase tracking-widest mt-0.5">{user.email}</span>
               </div>
             </div>
           )}
+          
+          {user && isSidebarCollapsed && (
+            <div className="flex justify-center mb-8">
+               <div className="h-12 w-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black border-2 border-white shadow-sm">
+                  {user.displayName?.charAt(0) || user.email?.charAt(0) || 'A'}
+               </div>
+            </div>
+          )}
+
           <Button 
             variant="ghost" 
-            className="w-full justify-start text-slate-400 hover:text-destructive hover:bg-destructive/5 font-black rounded-2xl h-12 transition-colors" 
+            className={cn(
+              "w-full text-slate-400 hover:text-destructive hover:bg-destructive/5 font-black rounded-2xl h-12 transition-colors",
+              isSidebarCollapsed ? "justify-center px-0" : "justify-start px-5"
+            )} 
             onClick={logout}
           >
-            <LogOut className="mr-4 h-5 w-5" />
-            Sign out
+            <LogOut className={cn(isSidebarCollapsed ? "h-6 w-6 mr-0" : "mr-4 h-5 w-5")} />
+            {!isSidebarCollapsed && "Sign out"}
           </Button>
         </div>
       </aside>
@@ -193,14 +241,32 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             
             <div className="hidden md:flex items-center relative max-w-md w-full">
               <Search className="absolute left-4 h-4 w-4 text-slate-400" />
-              <Input 
-                placeholder="Search anything..." 
-                className="pl-11 h-12 bg-slate-50 border-0 rounded-2xl focus-visible:ring-primary/20 font-medium"
-              />
+              <form onSubmit={handleGlobalSearch} className="w-full">
+                <Input 
+                  placeholder="Search anything..." 
+                  value={globalSearch}
+                  onChange={(e) => setGlobalSearch(e.target.value)}
+                  className="pl-11 h-12 bg-slate-50 border-0 rounded-2xl focus-visible:ring-primary/20 font-medium w-full"
+                />
+              </form>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
+            <DropdownMenu>
+              <DropdownMenuTrigger className="rounded-2xl h-12 w-12 bg-slate-50 border border-slate-100 hover:bg-slate-100 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
+                <Settings className="h-5 w-5 text-slate-600" />
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 font-bold">
+                <DropdownMenuLabel>Settings</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">Account Profile</DropdownMenuItem>
+                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">AI Configuration</DropdownMenuItem>
+                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">Billing & Subscription</DropdownMenuItem>
+                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">Organization Settings</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <DropdownMenu>
               <DropdownMenuTrigger className="rounded-2xl h-12 w-12 bg-slate-50 border border-slate-100 hover:bg-slate-100 relative flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
                 <Bell className="h-5 w-5 text-slate-600" />

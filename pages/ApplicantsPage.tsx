@@ -70,7 +70,7 @@ import { format } from 'date-fns';
 import { collection, getDocs, doc, deleteDoc, query, orderBy, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useRef } from 'react';
 import { GoogleGenAI } from "@google/genai";
@@ -113,6 +113,7 @@ export default function ApplicantsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const { loadScripts, openPicker, accessToken } = useGooglePicker();
@@ -120,7 +121,13 @@ export default function ApplicantsPage() {
   useEffect(() => {
     fetchData();
     loadScripts();
-  }, []);
+    
+    // Handle search query from URL
+    const query = searchParams.get('search');
+    if (query) {
+      setSearchQuery(query);
+    }
+  }, [searchParams]);
 
   const fetchData = async () => {
     try {
@@ -349,7 +356,7 @@ export default function ApplicantsPage() {
     const matchesSearch = 
       a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (a.email && a.email.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (a.education && a.education.toLowerCase().includes(searchQuery.toLowerCase()));
+      (a.phone && a.phone.toLowerCase().includes(searchQuery.toLowerCase()));
     
     const matchesJob = jobFilter === 'all' || a.jobId === jobFilter;
     
@@ -497,7 +504,7 @@ export default function ApplicantsPage() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search by name, email or education..."
+            placeholder="Search by name, email or phone..."
             className="pl-10 h-12 border-border shadow-sm rounded-xl"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -546,6 +553,48 @@ export default function ApplicantsPage() {
         candidateCount={selectedApplicants.length} 
       />
 
+      {selectedApplicants.length > 0 && (
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-slate-900 border border-slate-800 p-4 flex justify-between items-center px-6 rounded-2xl shadow-xl"
+        >
+          <div className="flex items-center gap-4">
+            <span className="text-sm font-black text-white">
+              {selectedApplicants.length} candidate{selectedApplicants.length !== 1 ? 's' : ''} selected
+            </span>
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5"
+              onClick={() => setSelectedApplicants([])}
+            >
+              Clear
+            </Button>
+          </div>
+          <div className="flex items-center gap-3">
+            {jobFilter !== 'all' && (
+              <Button 
+                className="bg-primary hover:bg-primary/90 font-bold h-10 px-5 rounded-xl border-0 shadow-lg shadow-primary/20"
+                onClick={handleBulkScreen}
+                disabled={screeningLoading}
+              >
+                <Play className="mr-2 h-4 w-4 fill-current" />
+                Screen Selected
+              </Button>
+            )}
+            <Button 
+              variant="destructive" 
+              className="font-bold h-10 px-5 rounded-xl border-0 shadow-lg shadow-destructive/20"
+              onClick={handleBulkDelete}
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Delete Selected
+            </Button>
+          </div>
+        </motion.div>
+      )}
+
       <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
         <div className="h-2 w-full bg-primary" />
         <CardHeader className="pb-2">
@@ -586,7 +635,7 @@ export default function ApplicantsPage() {
                     </TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest">Candidate</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest">Applied For</TableHead>
-                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Education</TableHead>
+                    <TableHead className="font-black text-[10px] uppercase tracking-widest">Phone Number</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest">AI Status</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest">Applied On</TableHead>
                     <TableHead className="font-black text-[10px] uppercase tracking-widest">Source</TableHead>
@@ -639,13 +688,13 @@ export default function ApplicantsPage() {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2 text-sm font-bold text-muted-foreground">
-                              <GraduationCap className="h-4 w-4 text-primary/60" />
-                              <span className="truncate max-w-[150px]">{applicant.education || 'N/A'}</span>
+                              <Phone className="h-4 w-4 text-primary/60" />
+                              <span className="truncate max-w-[150px]">{applicant.phone || 'N/A'}</span>
                             </div>
                           </TableCell>
                           <TableCell>
                             {screeningMap[applicant.id] ? (
-                              <Link to={`/admin/screening/${applicant.jobId}/${screeningMap[applicant.id].screeningId}`}>
+                              <Link to={`/admin/screening/${applicant.jobId}/${screeningMap[applicant.id].screeningId}?applicantId=${applicant.id}`}>
                                 <div className="flex flex-col gap-1 group/status">
                                   <div className={cn(
                                     "inline-flex items-center w-fit gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
@@ -716,34 +765,6 @@ export default function ApplicantsPage() {
             </div>
           )}
         </CardContent>
-        {selectedApplicants.length > 0 && (
-          <CardFooter className="bg-slate-900 border-t border-slate-800 py-4 flex justify-between items-center px-6 rounded-b-2xl">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-black text-white">
-                {selectedApplicants.length} applicant{selectedApplicants.length !== 1 ? 's' : ''} selected
-              </span>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-xs font-bold text-slate-400 hover:text-white hover:bg-white/5"
-                onClick={() => setSelectedApplicants([])}
-              >
-                Clear selection
-              </Button>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button 
-                variant="destructive" 
-                size="sm" 
-                className="font-bold shadow-lg shadow-destructive/10 h-10 px-5 rounded-xl"
-                onClick={handleBulkDelete}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Remove Selected
-              </Button>
-            </div>
-          </CardFooter>
-        )}
       </Card>
     </div>
   );

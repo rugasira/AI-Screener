@@ -108,6 +108,7 @@ export default function JobsPage() {
   const [requirements, setRequirements] = useState('');
   const [skills, setSkills] = useState('');
   const [experience, setExperience] = useState('');
+  const [salaryRange, setSalaryRange] = useState('');
   const [passingScore, setPassingScore] = useState('70');
   const [deadline, setDeadline] = useState('');
 
@@ -136,6 +137,7 @@ export default function JobsPage() {
     setRequirements(job.requirements);
     setSkills(job.skills);
     setExperience(job.experience);
+    setSalaryRange(job.salaryRange || '');
     setPassingScore(job.passingScore?.toString() || '70');
     setDeadline(job.deadline || '');
     setIsEditOpen(true);
@@ -148,6 +150,7 @@ export default function JobsPage() {
     setRequirements('');
     setSkills('');
     setExperience('');
+    setSalaryRange('');
     setPassingScore('70');
     setDeadline('');
     setEditingJobId(null);
@@ -164,6 +167,7 @@ export default function JobsPage() {
         requirements,
         skills,
         experience,
+        salaryRange,
         passingScore: parseInt(passingScore, 10),
         deadline,
         createdAt: editingJobId ? jobs.find(j => j.id === editingJobId).createdAt : new Date().toISOString()
@@ -395,6 +399,18 @@ export default function JobsPage() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="salaryRange" className="font-bold">Salary Range</Label>
+                  <Input
+                    id="salaryRange"
+                    value={salaryRange || ''}
+                    onChange={(e) => setSalaryRange(e.target.value)}
+                    placeholder="e.g. $50k - $80k"
+                    className="h-11 border-border"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
                   <Label htmlFor="passingScore" className="font-bold">Passing Score (/100)</Label>
                   <Input
                     id="passingScore"
@@ -407,17 +423,17 @@ export default function JobsPage() {
                     required
                   />
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="deadline" className="font-bold">Application Deadline</Label>
-                <Input
-                  id="deadline"
-                  type="date"
-                  value={deadline}
-                  onChange={(e) => setDeadline(e.target.value)}
-                  className="h-11 border-border"
-                  required
-                />
+                <div className="space-y-2">
+                  <Label htmlFor="deadline" className="font-bold">Application Deadline</Label>
+                  <Input
+                    id="deadline"
+                    type="date"
+                    value={deadline}
+                    onChange={(e) => setDeadline(e.target.value)}
+                    className="h-11 border-border"
+                    required
+                  />
+                </div>
               </div>
               <DialogFooter className="pt-4">
                 <Button type="submit" disabled={isSubmitting} className="w-full h-11 text-lg font-bold">
@@ -602,7 +618,7 @@ export default function JobsPage() {
           variants={container}
           initial="hidden"
           animate="show"
-          className="grid gap-8 md:grid-cols-2 lg:grid-cols-3"
+          className="grid gap-8 md:grid-cols-1 lg:grid-cols-2"
         >
           {filteredJobs.map((job) => (
             <motion.div key={job.id} variants={item}>
@@ -611,12 +627,21 @@ export default function JobsPage() {
                 <CardHeader className="pb-4">
                   <div className="flex justify-between items-start">
                     <div className="flex flex-col gap-2">
-                      <CardTitle className="text-2xl font-black group-hover:text-primary transition-colors line-clamp-1">
+                      <CardTitle className="text-3xl font-black group-hover:text-primary transition-colors line-clamp-1">
                         {job.title}
                       </CardTitle>
-                      <span className="inline-flex items-center w-fit rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary border border-primary/20 uppercase tracking-widest">
-                        {job.type === 'internship' ? 'Internship' : job.type === 'part-time' ? 'Part-time' : 'Full-time'}
-                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center w-fit rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary border border-primary/20 uppercase tracking-widest">
+                          {job.type === 'internship' ? 'Internship' : job.type === 'part-time' ? 'Part-time' : 'Full-time'}
+                        </span>
+                        <span className="text-xs font-bold text-slate-500">• {job.location}</span>
+                        {job.salaryRange && (
+                          <>
+                            <span className="text-slate-500">•</span>
+                            <span className="text-xs font-bold text-emerald-600 truncate max-w-[120px]">{job.salaryRange}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                     <DropdownMenu>
                       <DropdownMenuTrigger className="-mt-2 -mr-2 hover:bg-muted rounded-full h-8 w-8 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
@@ -652,8 +677,29 @@ export default function JobsPage() {
                     )}
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="flex-grow">
-                  <div className="text-sm text-muted-foreground line-clamp-3 mb-6 leading-relaxed">
+                <CardContent className="flex-grow space-y-6">
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                        <Clock className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Experience</span>
+                        <span className="text-lg font-black text-slate-900">{job.experience.replace(/[^0-9+]/g, '') || job.experience}</span>
+                      </div>
+                    </div>
+                    <div className="h-10 w-[1px] bg-border" />
+                    <div className="flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center">
+                        <Target className="h-5 w-5 text-emerald-600" />
+                      </div>
+                      <div>
+                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Target</span>
+                        <span className="text-lg font-black text-slate-900">{job.passingScore || 70}%</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground line-clamp-2 mb-6 leading-relaxed italic">
                     {job.requirements}
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -669,11 +715,7 @@ export default function JobsPage() {
                     )}
                   </div>
                 </CardContent>
-                <CardFooter className="pt-4 border-t border-border bg-muted/20 flex justify-between items-center">
-                  <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
-                    <Target className="h-4 w-4 text-primary" />
-                    Score: {job.passingScore || 70}%
-                  </div>
+                <CardFooter className="pt-4 border-t border-border bg-muted/20 flex justify-end items-center">
                   <div className="flex items-center gap-2">
                     <Link to={`/admin/jobs/${job.id}`}>
                       <Button variant="ghost" size="sm" className="font-bold group-hover:text-primary group-hover:bg-primary/10 transition-all">

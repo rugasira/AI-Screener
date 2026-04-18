@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
+import { motion } from 'framer-motion';
+import { cn } from '@/lib/utils';
 import { 
   AreaChart, 
   Area, 
@@ -37,7 +39,7 @@ export default function DashboardPage() {
   });
   
   const [recentJobs, setRecentJobs] = useState<any[]>([]);
-  const [recentApplicants, setRecentApplicants] = useState<any[]>([]);
+  const [topCandidates, setTopCandidates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // For charts
@@ -57,6 +59,33 @@ export default function DashboardPage() {
         // Fetch Screenings
         const screeningsSnapshot = await getDocs(collection(db, 'screenings'));
         const screeningsList = screeningsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        // Extract top candidates from screenings
+        const allScreenedCandidates: any[] = [];
+        screeningsList.forEach((s: any) => {
+          if (s.results && Array.isArray(s.results)) {
+            s.results.forEach((res: any) => {
+              // Only show candidates with matchScore > 85
+              if (res.matchScore > 85) {
+                const applicant = applicantsList.find(a => a.id === res.applicantId);
+                if (applicant) {
+                  allScreenedCandidates.push({
+                    ...applicant,
+                    matchScore: res.matchScore,
+                    jobTitle: jobsList.find(j => j.id === s.jobId)?.title || 'Unknown Job'
+                  });
+                }
+              }
+            });
+          }
+        });
+
+        // Sort by match score and take top 5
+        const sortedTop = allScreenedCandidates
+          .sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0))
+          .slice(0, 5);
+        
+        setTopCandidates(sortedTop);
 
         let screenedCount = 0;
         let passedCount = 0;
@@ -85,7 +114,6 @@ export default function DashboardPage() {
         });
 
         setRecentJobs(jobsList.slice(0, 5));
-        setRecentApplicants(applicantsList.slice(0, 5));
 
         // Generate rough trend data based on applicants createdAt
         const datesMap = new Map<string, number>();
@@ -348,9 +376,18 @@ export default function DashboardPage() {
                       <p className="text-sm text-slate-500 mt-0.5">{job.type} • {job.location}</p>
                     </div>
                     <div className="text-right">
-                      <span className="text-xs font-black px-3 py-1 bg-primary/10 text-primary rounded-full uppercase tracking-wider">
-                        {job.status === 'open' ? 'Active' : 'Closed'}
-                      </span>
+                      {(() => {
+                        const isExpired = job.deadline ? new Date(job.deadline) < new Date() : false;
+                        const status = job.status || 'open';
+                        const displayStatus = (status === 'closed' || isExpired) ? 'Closed' : 'Active';
+                        const statusColor = displayStatus === 'Active' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500';
+                        
+                        return (
+                          <span className={cn("text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider", statusColor)}>
+                            {displayStatus}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                 ))
@@ -359,13 +396,13 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Recent Applicants */}
+        {/* Top Screened Candidates */}
         <Card className="rounded-2xl border-0 shadow-lg bg-white">
           <CardHeader className="border-b border-slate-50 flex flex-row items-center justify-between pb-6">
             <div>
-              <CardTitle className="text-xl font-black">Recent Applicants</CardTitle>
+              <CardTitle className="text-xl font-black">Top Candidates</CardTitle>
               <CardDescription className="text-xs font-bold uppercase tracking-widest mt-1">
-                Latest candidates added
+                Highest match scores detected
               </CardDescription>
             </div>
             <Link to="/admin/applicants" className="text-sm font-bold text-primary hover:text-primary/80 flex items-center">
@@ -374,13 +411,12 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-slate-50">
-              {recentApplicants.length === 0 ? (
+              {topCandidates.length === 0 ? (
                 <div className="p-8 text-center text-slate-400 font-medium">
-                  No applicants yet
+                  Perform a screening to see top candidates
                 </div>
               ) : (
-                recentApplicants.map(applicant => {
-                  const applicantJob = recentJobs.find(j => j.id === applicant.jobId);
+                topCandidates.map(applicant => {
                   return (
                     <div key={applicant.id} className="p-6 hover:bg-slate-50 transition-colors flex items-center justify-between">
                       <div className="flex items-center gap-4">
@@ -390,12 +426,17 @@ export default function DashboardPage() {
                         <div>
                           <h4 className="font-bold text-slate-900">{applicant.name || 'Unknown Candidate'}</h4>
                           <p className="text-xs font-medium text-slate-500 mt-0.5 truncate max-w-[200px]">
-                            {applicantJob?.title || 'Unknown Job'}
+                            {applicant.jobTitle}
                           </p>
                         </div>
                       </div>
-                      <div className="text-right text-xs font-bold text-slate-400">
-                        {applicant.createdAt ? format(parseISO(applicant.createdAt), 'MMM d, yyyy') : 'Unknown Date'}
+                      <div className="text-right">
+                        <div className={cn(
+                          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                          applicant.matchScore >= 85 ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
+                        )}>
+                          {applicant.matchScore}% Match
+                        </div>
                       </div>
                     </div>
                   )

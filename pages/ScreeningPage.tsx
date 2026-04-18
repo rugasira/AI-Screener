@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, AlertCircle, Star, Download, ChevronRight, Send } from 'lucide-react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeft, CheckCircle2, AlertCircle, Star, Download, ChevronRight, Send, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -21,18 +21,23 @@ import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { BatchEmailModal } from '@/components/BatchEmailModal';
 
 export default function ScreeningPage() {
   const { jobId, screeningId } = useParams();
+  const [searchParams] = useSearchParams();
+  const applicantIdFilter = searchParams.get('applicantId');
+  
   const [job, setJob] = useState<any>(null);
   const [screening, setScreening] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [sendingEmails, setSendingEmails] = useState<Record<string, boolean>>({});
   const [sentEmails, setSentEmails] = useState<Record<string, boolean>>({});
+  const [isBatchEmailOpen, setIsBatchEmailOpen] = useState(false);
 
   useEffect(() => {
     fetchScreeningDetails();
-  }, [jobId, screeningId]);
+  }, [jobId, screeningId, applicantIdFilter]);
 
   const fetchScreeningDetails = async () => {
     try {
@@ -184,7 +189,9 @@ export default function ScreeningPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">AI Screening Results</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
+              {applicantIdFilter ? 'Candidate Evaluation' : 'AI Screening Results'}
+            </h1>
             <div className="flex items-center gap-2 mt-1">
               <p className="text-sm text-gray-500">For {job.title}</p>
               <span className="inline-flex items-center rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-medium text-purple-700 ring-1 ring-inset ring-purple-700/10 uppercase tracking-wider">
@@ -193,14 +200,34 @@ export default function ScreeningPage() {
             </div>
           </div>
         </div>
-        <Button variant="outline" onClick={handleExportCSV}>
-          <Download className="mr-2 h-4 w-4" />
-          Export CSV
-        </Button>
+        <div className="flex items-center gap-2">
+          {screening.results.some((r: any) => r.emailDraft) && (
+            <Button 
+              className="bg-emerald-600 hover:bg-emerald-700 font-bold shadow-lg shadow-emerald-200"
+              onClick={() => setIsBatchEmailOpen(true)}
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              Review & Send Outreach ({screening.results.filter((r: any) => r.emailDraft && !sentEmails[r.applicantId]).length})
+            </Button>
+          )}
+          {applicantIdFilter && (
+            <Link to={`/admin/screening/${jobId}/${screeningId}`}>
+              <Button variant="ghost" size="sm" className="text-xs font-bold text-slate-500">
+                View All Candidates
+              </Button>
+            </Link>
+          )}
+          <Button variant="outline" onClick={handleExportCSV}>
+            <Download className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
       <Accordion type="multiple" className="grid gap-6">
-        {screening.results.map((result: any, index: number) => {
+        {screening.results
+          .filter((r: any) => !applicantIdFilter || r.applicantId === applicantIdFilter)
+          .map((result: any, index: number) => {
           const passScore = job.passingScore || 70;
           const isPassed = result.matchScore >= passScore;
           const isExceptional = result.matchScore >= 90;
@@ -357,6 +384,33 @@ export default function ScreeningPage() {
           </motion.div>
         )})}
       </Accordion>
+
+      {screening && (
+        <BatchEmailModal 
+          isOpen={isBatchEmailOpen}
+          onClose={() => setIsBatchEmailOpen(false)}
+          emails={screening.results
+            .filter((r: any) => r.emailDraft)
+            .map((r: any) => ({
+              applicantId: r.applicantId,
+              name: r.applicant?.name || 'Candidate',
+              email: r.applicant?.email || '',
+              subject: r.matchScore >= (job.passingScore || 70) 
+                ? `Interview Invitation: ${job.title} at Umurava` 
+                : `Update on your application for ${job.title}`,
+              body: r.emailDraft,
+              status: sentEmails[r.applicantId] ? 'sent' : 'pending'
+            }))}
+          onFinish={() => {
+            // Update sent state locally
+            const newSent = { ...sentEmails };
+            screening.results.forEach((r: any) => {
+              if (r.emailDraft) newSent[r.applicantId] = true;
+            });
+            setSentEmails(newSent);
+          }}
+        />
+      )}
     </div>
   );
 }

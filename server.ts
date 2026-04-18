@@ -8,16 +8,9 @@ import nodemailer from 'nodemailer';
 import { createRequire } from 'module';
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
-import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, updateDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, getDocs, doc, setDoc, deleteDoc, updateDoc, getDoc, query, where } from 'firebase/firestore';
 
-let requireFunc: NodeRequire;
-if (typeof require !== 'undefined') {
-  requireFunc = require;
-} else {
-  // @ts-ignore
-  requireFunc = createRequire(import.meta.url);
-}
-const pdfParse = requireFunc('pdf-parse');
+import pdfParse from 'pdf-parse/lib/pdf-parse.js';
 
 // Initialize Firebase
 const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
@@ -224,7 +217,7 @@ app.post('/api/applicants/apply', (req, res, next) => {
           throw new Error('PDF parser is not properly initialized');
         }
 
-        const data = await pdfParse(dataBuffer);
+        const data = await pdfParse(dataBuffer, {});
         resumeText = data.text;
         console.log('PDF parsed successfully, length:', resumeText?.length);
         
@@ -324,6 +317,15 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
 
     const newApplicants: any[] = [];
 
+    // Pre-fetch existing applicants to check for duplicates in memory for performance
+    let existingApplicants: any[] = [];
+    if (isFirestore(db)) {
+        const snapshot = await getDocs(collection(db, 'applicants'));
+        existingApplicants = snapshot.docs.map(doc => doc.data());
+    } else {
+        existingApplicants = db.applicants;
+    }
+
     for (const file of files) {
       if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
         // Parse CSV
@@ -337,10 +339,13 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
         });
         
         results.forEach(row => {
+          const email = row.email || row.Email || '';
+          if (!email) return;
+
           newApplicants.push({
             id: Date.now().toString() + Math.random().toString(36).substring(7),
             name: row.name || row.Name || 'Unknown',
-            email: row.email || row.Email || '',
+            email: email,
             jobId: jobId || row.jobId || row.JobId || null,
             profileData: row,
             source: 'CSV',
@@ -351,7 +356,7 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
         // Parse PDF
         try {
           const dataBuffer = fs.readFileSync(file.path);
-          const data = await pdfParse(dataBuffer);
+          const data = await pdfParse(dataBuffer, {});
           const text = data.text;
           
           if (!text || text.trim().length === 0) {
@@ -366,7 +371,22 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
           // Extract email using regex
           const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
           const emailMatch = text.match(emailRegex);
-          const email = emailMatch ? emailMatch[0] : '';
+    const email = emailMatch ? emailMatch[0] : '';
+
+          // Check if applicant already exists for this job
+          let exists = false;
+          if (isFirestore(db)) {
+            const applicantsSnapshot = await getDocs(query(collection(db, 'applicants'), where('email', '==', email), where('jobId', '==', jobId)));
+            if (!applicantsSnapshot.empty) exists = true;
+          } else {
+            exists = db.applicants.some((a: any) => a.email === email && a.jobId === jobId);
+          }
+
+          if (exists) {
+            console.log(`Applicant with email ${email} already exists for job ${jobId}. Skipping.`);
+            fs.unlinkSync(file.path);
+            continue;
+          }
 
           newApplicants.push({
             id: Date.now().toString() + Math.random().toString(36).substring(7),
