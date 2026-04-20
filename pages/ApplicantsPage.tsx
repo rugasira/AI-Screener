@@ -136,7 +136,10 @@ export default function ApplicantsPage() {
       const jobsSnapshot = await getDocs(collection(db, 'jobs'));
       const jobsMap: Record<string, any> = {};
       jobsSnapshot.docs.forEach(doc => {
-        jobsMap[doc.id] = { id: doc.id, ...doc.data() };
+        const data = doc.data();
+        if (data.status !== 'draft') {
+          jobsMap[doc.id] = { id: doc.id, ...data };
+        }
       });
       setJobs(jobsMap);
 
@@ -383,7 +386,7 @@ export default function ApplicantsPage() {
           )}
           <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if(!open) setPendingFiles([]); }}>
             <DialogTrigger render={
-              <Button className="bg-slate-900 hover:bg-slate-800 text-white shadow-lg shadow-slate-200 h-11 px-6 rounded-xl font-bold">
+              <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-11 px-6 rounded-xl font-bold transition-all duration-300">
                 <Upload className="mr-2 h-5 w-5" />
                 Bulk Upload
               </Button>
@@ -400,7 +403,9 @@ export default function ApplicantsPage() {
                   <Label className="font-black text-xs uppercase tracking-widest text-slate-400">Target Job Posting</Label>
                   <Select value={uploadJobId} onValueChange={setUploadJobId}>
                     <SelectTrigger className="h-14 border-slate-100 bg-slate-50 rounded-2xl focus:ring-primary/20">
-                      <SelectValue placeholder="Choose a job role..." />
+                      <SelectValue placeholder="Choose a job role...">
+                        {uploadJobId ? jobs[uploadJobId]?.title : "Choose a job role..."}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl border-slate-100">
                       {Object.values(jobs).map((job: any) => (

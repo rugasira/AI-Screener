@@ -236,11 +236,23 @@ export default function JobDetailsPage() {
       });
 
       if (res.ok) {
-        toast.success(`Upload complete: ${pendingFiles.length} resumes added to ${job.title}`, { 
-          id: `upload-${taskId}`,
-          duration: 5000,
-          description: "Candidate screening can now be initiated."
-        });
+        const data = await res.json();
+        const uploadedCount = data.applicants?.length || 0;
+        const duplicateCount = data.duplicates?.length || 0;
+
+        if (duplicateCount > 0) {
+          toast.warning(`${duplicateCount} candidates were skipped because they already exist for this job.`, {
+            id: `upload-${taskId}`,
+            duration: 8000,
+            description: `Successfully uploaded ${uploadedCount} new candidates.`
+          });
+        } else {
+          toast.success(`Upload complete: ${uploadedCount} resumes added to ${job.title}`, { 
+            id: `upload-${taskId}`,
+            duration: 5000,
+            description: "Candidate screening can now be initiated."
+          });
+        }
         fetchApplicants();
       } else {
         const error = await res.json();

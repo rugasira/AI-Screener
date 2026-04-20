@@ -50,7 +50,8 @@ export default function DashboardPage() {
       try {
         // Fetch Jobs
         const jobsSnapshot = await getDocs(query(collection(db, 'jobs'), orderBy('createdAt', 'desc')));
-        const jobsList = jobsSnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+        const allJobs = jobsSnapshot.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
+        const jobsList = allJobs.filter(j => j.status !== 'draft');
         
         // Fetch Applicants
         const applicantsSnapshot = await getDocs(query(collection(db, 'applicants'), orderBy('createdAt', 'desc')));

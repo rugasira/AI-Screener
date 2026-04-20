@@ -82,7 +82,7 @@ export default function LoginPage() {
         </div>
 
         <Card className="bg-white border-0 shadow-2xl rounded-[2rem] overflow-hidden">
-          <div className="h-2 w-full bg-slate-900" />
+          <div className="h-1.5 w-full bg-primary/20 group-hover:bg-primary transition-colors duration-500" />
           <CardHeader className="pb-2">
             <CardTitle className="text-xl font-black text-slate-900 flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
@@ -126,7 +126,7 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full bg-slate-900 hover:bg-slate-800 text-white h-12 rounded-xl font-black shadow-lg shadow-slate-200 transition-all active:scale-[0.98]" disabled={isSubmitting}>
+              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white h-12 rounded-xl font-black shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <div className="flex items-center">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
@@ -163,16 +163,9 @@ export default function LoginPage() {
               </svg>
               Sign in with Google
             </Button>
-            
-            <div className="mt-10 text-center">
-              <Link to="/careers" className="inline-flex items-center text-sm font-bold text-primary hover:text-primary/80 transition-colors group">
-                <Sparkles className="mr-2 h-4 w-4 group-hover:rotate-12 transition-transform" />
-                Careers Portal
-              </Link>
-            </div>
           </CardContent>
         </Card>
-        
+旋        
         <p className="text-center mt-8 text-white/50 text-xs font-medium">
           &copy; {new Date().getFullYear()} Umurava. All rights reserved.
         </p>

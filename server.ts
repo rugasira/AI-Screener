@@ -316,8 +316,9 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
     }
 
     const newApplicants: any[] = [];
+    const duplicates: string[] = [];
 
-    // Pre-fetch existing applicants to check for duplicates in memory for performance
+    // Pre-fetch existing applicants to check for duplicates
     let existingApplicants: any[] = [];
     if (isFirestore(db)) {
         const snapshot = await getDocs(collection(db, 'applicants'));
@@ -325,6 +326,12 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
     } else {
         existingApplicants = db.applicants;
     }
+
+    const existingEmailsInJob = new Set(
+      existingApplicants
+        .filter((a: any) => a.jobId === jobId)
+        .map((a: any) => a.email.toLowerCase())
+    );
 
     for (const file of files) {
       if (file.mimetype === 'text/csv' || file.originalname.endsWith('.csv')) {
@@ -339,18 +346,25 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
         });
         
         results.forEach(row => {
-          const email = row.email || row.Email || '';
+          const email = (row.email || row.Email || '').toLowerCase().trim();
           if (!email) return;
+
+          if (existingEmailsInJob.has(email)) {
+            duplicates.push(email);
+            return;
+          }
 
           newApplicants.push({
             id: Date.now().toString() + Math.random().toString(36).substring(7),
             name: row.name || row.Name || 'Unknown',
             email: email,
+            phone: row.phone || row.Phone || row.tel || row.Tel || '',
             jobId: jobId || row.jobId || row.JobId || null,
             profileData: row,
             source: 'CSV',
             createdAt: new Date().toISOString()
           });
+          existingEmailsInJob.add(email);
         });
       } else if (file.mimetype === 'application/pdf' || file.originalname.endsWith('.pdf')) {
         // Parse PDF
@@ -361,56 +375,54 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
           
           if (!text || text.trim().length === 0) {
             fs.unlinkSync(file.path);
-            return res.status(400).json({ error: `The uploaded PDF (${file.originalname}) contains no readable text. Please ensure your PDF is text-based and not just scanned images.` });
+            continue; // Skip silently if no text
           }
           
-          // Extract a name (very basic heuristic for prototype)
-          const textLines = text.split('\n').filter((line: string) => line.trim().length > 0);
-          const name = textLines.length > 0 ? textLines[0].trim() : file.originalname;
-
           // Extract email using regex
           const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
           const emailMatch = text.match(emailRegex);
-    const email = emailMatch ? emailMatch[0] : '';
+          const email = emailMatch ? emailMatch[0].toLowerCase().trim() : '';
 
-          // Check if applicant already exists for this job
-          let exists = false;
-          if (isFirestore(db)) {
-            const applicantsSnapshot = await getDocs(query(collection(db, 'applicants'), where('email', '==', email), where('jobId', '==', jobId)));
-            if (!applicantsSnapshot.empty) exists = true;
-          } else {
-            exists = db.applicants.some((a: any) => a.email === email && a.jobId === jobId);
-          }
+          // Extract phone number using regex
+          const phoneRegex = /(\+?\d{1,3}[-.\s]?)?\(?\d{2,4}\)?[-.\s]?\d{3,4}[-.\s]?\d{3,4}/;
+          const phoneMatch = text.match(phoneRegex);
+          const phone = phoneMatch ? phoneMatch[0].trim() : '';
 
-          if (exists) {
-            console.log(`Applicant with email ${email} already exists for job ${jobId}. Skipping.`);
+          if (email && existingEmailsInJob.has(email)) {
+            duplicates.push(email);
             fs.unlinkSync(file.path);
             continue;
           }
+
+          // Extract a name (very basic heuristic)
+          const textLines = text.split('\n').filter((line: string) => line.trim().length > 0);
+          const name = textLines.length > 0 ? textLines[0].trim() : file.originalname;
 
           newApplicants.push({
             id: Date.now().toString() + Math.random().toString(36).substring(7),
             name: name,
             email: email,
-            phone: '',
+            phone: phone,
             education: '',
             experience: '',
             skills: [],
             jobId: jobId || null,
+            resumeText: text, // Store text directly
             profileData: { resumeText: text },
             source: 'PDF',
             fileName: file.originalname,
             createdAt: new Date().toISOString()
           });
+          if (email) existingEmailsInJob.add(email);
         } catch (err) {
           console.error('PDF parsing error in upload:', err);
-          fs.unlinkSync(file.path);
-          return res.status(400).json({ error: `Failed to read the PDF file (${file.originalname}). The file might be corrupted, password-protected, or in an unsupported format.` });
         }
       }
       
       // Clean up uploaded file
-      fs.unlinkSync(file.path);
+      if (fs.existsSync(file.path)) {
+        fs.unlinkSync(file.path);
+      }
     }
 
     if (isFirestore(db)) {
@@ -420,7 +432,12 @@ app.post('/api/applicants/upload', upload.array('resumes'), async (req, res) => 
     } else {
       db.applicants.push(...newApplicants);
     }
-    res.status(201).json({ message: `Successfully processed ${newApplicants.length} applicants`, applicants: newApplicants });
+
+    res.status(201).json({ 
+      message: `Successfully processed ${newApplicants.length} applicants`, 
+      applicants: newApplicants,
+      duplicates: duplicates 
+    });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to process uploads' });

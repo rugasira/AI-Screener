@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { cn } from '@/lib/utils';
+import { Link, useSearchParams } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -63,7 +64,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, updateDoc } from 'firebase
 import { db } from '@/lib/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 
-import { generateJobDetails } from '@/lib/gemini';
+import { generateJobDetails, recommendSkills } from '@/lib/gemini';
 
 const container = {
   hidden: { opacity: 0 },
@@ -96,6 +97,11 @@ export default function JobsPage() {
   const [jobToDelete, setJobToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isClearDraftsDialogOpen, setIsClearDraftsDialogOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState<'active' | 'draft'>('active');
+  const [recommendedSkills, setRecommendedSkills] = useState<string[]>([]);
+  const [isGeneratingSkills, setIsGeneratingSkills] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const bulkFileInputRef = React.useRef<HTMLInputElement>(null);
@@ -112,9 +118,87 @@ export default function JobsPage() {
   const [passingScore, setPassingScore] = useState('70');
   const [deadline, setDeadline] = useState('');
 
+  const [searchParams] = useSearchParams();
+
   useEffect(() => {
     fetchJobs();
+    
+    // Handle search query from URL
+    const query = searchParams.get('search');
+    if (query) {
+      setSearchQuery(query);
+    }
+    
+    // Check for local draft on mount
+    const saved = localStorage.getItem('job_creation_draft');
+    if (saved) {
+      setHasUnsavedChanges(true);
+    }
   }, []);
+
+  // Auto-save form state to local storage for persistence
+  useEffect(() => {
+    const hasContent = title || location || requirements || skills || experience || salaryRange || deadline;
+    if (!editingJobId && hasContent && (isCreateOpen || isEditOpen)) {
+      const draftData = {
+        title, location, type, requirements, skills, experience, salaryRange, passingScore, deadline
+      };
+      localStorage.setItem('job_creation_draft', JSON.stringify(draftData));
+      setHasUnsavedChanges(true);
+    }
+  }, [title, location, type, requirements, skills, experience, salaryRange, passingScore, deadline, editingJobId, isCreateOpen, isEditOpen]);
+
+  const loadLocalDraft = () => {
+    const saved = localStorage.getItem('job_creation_draft');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        setTitle(data.title || '');
+        setLocation(data.location || '');
+        setType(data.type || 'job');
+        setRequirements(data.requirements || '');
+        setSkills(data.skills || '');
+        setExperience(data.experience || '');
+        setSalaryRange(data.salaryRange || '');
+        setPassingScore(data.passingScore || '70');
+        setDeadline(data.deadline || '');
+        setHasUnsavedChanges(true);
+        toast.info('Draft resumed', { description: 'You have unfinished work from your last session.' });
+        return true;
+      } catch (e) {
+        console.error('Error parsing draft', e);
+      }
+    }
+    return false;
+  };
+
+  const clearLocalDraft = () => {
+    localStorage.removeItem('job_creation_draft');
+    setHasUnsavedChanges(false);
+  };
+
+  const handleClearAllDrafts = async () => {
+    setIsClearDraftsDialogOpen(true);
+  };
+
+  const confirmClearAllDrafts = async () => {
+    const drafts = jobs.filter(j => j.status === 'draft');
+    if (drafts.length === 0) return;
+    
+    setIsDeleting(true);
+    try {
+      const promises = drafts.map(d => deleteDoc(doc(db, 'jobs', d.id)));
+      await Promise.all(promises);
+      toast.success(`Cleared ${drafts.length} drafts`);
+      fetchJobs();
+    } catch (error) {
+      console.error('Error clearing drafts:', error);
+      toast.error('Failed to clear drafts');
+    } finally {
+      setIsDeleting(false);
+      setIsClearDraftsDialogOpen(false);
+    }
+  };
 
   const fetchJobs = async () => {
     try {
@@ -154,10 +238,11 @@ export default function JobsPage() {
     setPassingScore('70');
     setDeadline('');
     setEditingJobId(null);
+    setRecommendedSkills([]);
   };
 
-  const handleCreateOrEditJob = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCreateOrEditJob = async (e: React.FormEvent, status: 'active' | 'draft' = 'active') => {
+    if (e) e.preventDefault();
     setIsSubmitting(true);
     try {
       const jobData = {
@@ -170,16 +255,23 @@ export default function JobsPage() {
         salaryRange,
         passingScore: parseInt(passingScore, 10),
         deadline,
+        status,
         createdAt: editingJobId ? jobs.find(j => j.id === editingJobId).createdAt : new Date().toISOString()
       };
 
       if (editingJobId) {
         await updateDoc(doc(db, 'jobs', editingJobId), jobData);
-        toast.success('Job updated successfully');
+        toast.success(status === 'draft' ? 'Draft saved' : 'Job updated', {
+          description: status === 'draft' ? 'You can complete this role later in the Drafts tab.' : undefined
+        });
       } else {
         const newJobRef = doc(collection(db, 'jobs'));
         await setDoc(newJobRef, { id: newJobRef.id, ...jobData });
-        toast.success('Job created successfully');
+        // Clear local draft upon successful save/publish of a new role
+        clearLocalDraft();
+        toast.success(status === 'draft' ? 'Draft saved' : 'Job created', {
+          description: status === 'draft' ? 'You can find this role in the Drafts tab.' : undefined
+        });
       }
 
       setIsCreateOpen(false);
@@ -216,25 +308,32 @@ export default function JobsPage() {
     }
   };
 
-  const handleGenerateWithAI = async () => {
+  const fetchRecommendedSkills = async () => {
     if (!title) {
-      toast.error('Please enter a title first to generate details.');
+      toast.error('Please enter a job title first');
       return;
     }
-
-    setIsGenerating(true);
+    setIsGeneratingSkills(true);
     try {
-      const generatedData = await generateJobDetails(title, type);
-      
-      setRequirements(generatedData.requirements || '');
-      setSkills(generatedData.skills || '');
-      setExperience(generatedData.experience || '');
-      toast.success('Details generated successfully!');
-    } catch (error: any) {
-      console.error('AI Generation error:', error);
-      toast.error(error.message || 'Failed to generate details with AI.');
+      const skillsArr = await recommendSkills(title);
+      setRecommendedSkills(skillsArr);
+      if (skillsArr.length === 0) {
+        toast.error('Could not generate skills. Please try again.');
+      }
+    } catch (error) {
+      console.error('Error fetching skills:', error);
+      toast.error('Failed to fetch recommendations');
     } finally {
-      setIsGenerating(false);
+      setIsGeneratingSkills(false);
+    }
+  };
+
+  const toggleSkill = (skill: string) => {
+    const currentSkills = skills.split(',').map(s => s.trim()).filter(Boolean);
+    if (currentSkills.some(s => s.toLowerCase() === skill.toLowerCase())) {
+      setSkills(currentSkills.filter(s => s.toLowerCase() !== skill.toLowerCase()).join(', '));
+    } else {
+      setSkills([...currentSkills, skill].join(', '));
     }
   };
 
@@ -275,10 +374,15 @@ export default function JobsPage() {
     }
   };
 
-  const filteredJobs = jobs.filter(job => 
+  const allFilteredJobs = jobs.filter(job => 
     job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     job.skills.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const filteredJobs = allFilteredJobs.filter(job => {
+    if (activeTab === 'active') return job.status !== 'draft';
+    return job.status === 'draft';
+  });
 
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-20">
@@ -290,25 +394,90 @@ export default function JobsPage() {
         accept=".pdf,.docx,.doc" 
         onChange={(e) => uploadingJobId && handleFileUpload(e, uploadingJobId)}
       />
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-border pb-6">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-foreground">Job Postings</h1>
           <p className="text-muted-foreground mt-1">Manage your active roles and AI screening workflows.</p>
+          
+          <div className="flex bg-muted/50 p-1 rounded-xl w-fit mt-6 border border-border/50">
+            <button
+              onClick={() => setActiveTab('active')}
+              className={cn(
+                "px-6 py-2 text-sm font-black rounded-lg transition-all",
+                activeTab === 'active' ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Active Roles
+            </button>
+            <button
+              onClick={() => setActiveTab('draft')}
+              className={cn(
+                "px-6 py-2 text-sm font-black rounded-lg transition-all",
+                activeTab === 'draft' ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Drafts
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-3">
-          <Dialog open={isCreateOpen} onOpenChange={(open) => { setIsCreateOpen(open); if (!open) resetForm(); }}>
+          <Dialog open={isCreateOpen} onOpenChange={(open) => { 
+            if (!open && !isSubmitting) {
+              // Auto-save to database draft when closing if there's content
+              if (title.trim() || requirements.trim()) {
+                handleCreateOrEditJob(null, 'draft');
+              } else {
+                resetForm();
+              }
+            }
+            setIsCreateOpen(open); 
+          }}>
             <DialogTrigger render={
-              <Button className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-11 px-6 rounded-xl font-bold">
+              <Button 
+                className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-11 px-6 rounded-xl font-bold relative"
+                onClick={() => {
+                  if (!isCreateOpen) {
+                    if (!hasUnsavedChanges) {
+                      resetForm();
+                    } else {
+                      loadLocalDraft();
+                    }
+                  }
+                }}
+              >
                 <Plus className="mr-2 h-5 w-5" />
                 Create New Role
+                {hasUnsavedChanges && !editingJobId && (
+                  <span className="absolute -top-1 -right-1 flex h-4 w-4">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-500 text-[8px] items-center justify-center text-white font-black">!</span>
+                  </span>
+                )}
               </Button>
             } />
           <DialogContent className="sm:max-w-[650px] max-h-[90vh] overflow-y-auto border-0 shadow-2xl">
             <DialogHeader>
-              <DialogTitle className="text-2xl font-bold">Create New Role</DialogTitle>
-              <DialogDescription>
-                Define the role details to help AI screen candidates accurately.
-              </DialogDescription>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col">
+                  <DialogTitle className="text-2xl font-black flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-primary" />
+                    Create New Role
+                  </DialogTitle>
+                  <DialogDescription>
+                    Define the role details to help AI screen candidates accurately.
+                  </DialogDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => handleCreateOrEditJob(e as any, 'draft')}
+                    className="text-primary hover:text-primary hover:bg-primary/5 font-black h-8 px-3 rounded-full uppercase tracking-tighter text-[10px]"
+                  >
+                    Save Draft
+                  </Button>
+                </div>
+              </div>
             </DialogHeader>
             <form onSubmit={handleCreateOrEditJob} className="space-y-6 py-4">
               <div className="grid grid-cols-2 gap-6">
@@ -350,20 +519,6 @@ export default function JobsPage() {
                 />
               </div>
 
-              <div className="flex justify-end">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleGenerateWithAI}
-                  disabled={isGenerating || !title}
-                  className="bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {isGenerating ? 'Generating...' : 'Auto-generate with AI'}
-                </Button>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="requirements" className="font-bold">Key Requirements</Label>
                 <Textarea
@@ -375,8 +530,21 @@ export default function JobsPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="skills" className="font-bold">Required Skills (Comma separated)</Label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="skills" className="font-bold">Required Skills (Comma separated)</Label>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={fetchRecommendedSkills}
+                    disabled={isGeneratingSkills || !title}
+                    className="h-7 text-[10px] font-black uppercase tracking-wider bg-primary/5 text-primary hover:bg-primary/10 rounded-full px-3"
+                  >
+                    {isGeneratingSkills ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                    Suggest Skills
+                  </Button>
+                </div>
                 <Input
                   id="skills"
                   value={skills}
@@ -385,6 +553,32 @@ export default function JobsPage() {
                   className="h-11 border-border"
                   required
                 />
+                
+                {recommendedSkills.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest px-1">AI Recommendations (Click to add)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {recommendedSkills.map((skill, index) => {
+                        const isSelected = skills.split(',').map(s => s.trim().toLowerCase()).includes(skill.toLowerCase());
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => toggleSkill(skill)}
+                            className={cn(
+                              "px-3 py-1 text-xs font-bold rounded-full transition-all border",
+                              isSelected 
+                                ? "bg-primary text-white border-primary shadow-sm" 
+                                : "bg-muted/50 text-muted-foreground hover:bg-muted border-transparent"
+                            )}
+                          >
+                            {skill}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
@@ -435,9 +629,18 @@ export default function JobsPage() {
                   />
                 </div>
               </div>
-              <DialogFooter className="pt-4">
+              <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  disabled={isSubmitting} 
+                  className="w-full h-11 text-lg font-bold border-slate-200 hover:bg-slate-50"
+                  onClick={(e) => handleCreateOrEditJob(e as any, 'draft')}
+                >
+                  Save as Draft
+                </Button>
                 <Button type="submit" disabled={isSubmitting} className="w-full h-11 text-lg font-bold">
-                  {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Creating Role...</> : 'Create Role'}
+                  {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Processing...</> : 'Create Role'}
                 </Button>
               </DialogFooter>
             </form>
@@ -482,20 +685,6 @@ export default function JobsPage() {
                 </div>
               </div>
               
-              <div className="flex justify-end">
-                <Button 
-                  type="button" 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleGenerateWithAI}
-                  disabled={isGenerating || !title}
-                  className="bg-primary/5 text-primary border-primary/20 hover:bg-primary/10"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {isGenerating ? 'Generating...' : 'Auto-generate with AI'}
-                </Button>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="edit-requirements" className="font-bold">Key Requirements</Label>
                 <Textarea
@@ -507,8 +696,21 @@ export default function JobsPage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="edit-skills" className="font-bold">Required Skills (Comma separated)</Label>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="edit-skills" className="font-bold">Required Skills (Comma separated)</Label>
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={fetchRecommendedSkills}
+                    disabled={isGeneratingSkills || !title}
+                    className="h-7 text-[10px] font-black uppercase tracking-wider bg-primary/5 text-primary hover:bg-primary/10 rounded-full px-3"
+                  >
+                    {isGeneratingSkills ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <Sparkles className="h-3 w-3 mr-1" />}
+                    Suggest Skills
+                  </Button>
+                </div>
                 <Input
                   id="edit-skills"
                   value={skills}
@@ -517,6 +719,32 @@ export default function JobsPage() {
                   className="h-11 border-border"
                   required
                 />
+                
+                {recommendedSkills.length > 0 && (
+                  <div className="space-y-2 pt-1">
+                    <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest px-1">AI Recommendations (Click to add)</p>
+                    <div className="flex flex-wrap gap-2">
+                      {recommendedSkills.map((skill, index) => {
+                        const isSelected = skills.split(',').map(s => s.trim().toLowerCase()).includes(skill.toLowerCase());
+                        return (
+                          <button
+                            key={index}
+                            type="button"
+                            onClick={() => toggleSkill(skill)}
+                            className={cn(
+                              "px-3 py-1 text-xs font-bold rounded-full transition-all border",
+                              isSelected 
+                                ? "bg-primary text-white border-primary shadow-sm" 
+                                : "bg-muted/50 text-muted-foreground hover:bg-muted border-transparent"
+                            )}
+                          >
+                            {skill}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
@@ -555,9 +783,18 @@ export default function JobsPage() {
                   required
                 />
               </div>
-              <DialogFooter className="pt-4">
+              <DialogFooter className="pt-4 flex flex-col sm:flex-row gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  disabled={isSubmitting} 
+                  className="w-full h-11 text-lg font-bold border-slate-200 hover:bg-slate-50"
+                  onClick={(e) => handleCreateOrEditJob(e as any, 'draft')}
+                >
+                  Save as Draft
+                </Button>
                 <Button type="submit" disabled={isSubmitting} className="w-full h-11 text-lg font-bold">
-                  {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Updating...</> : 'Save Changes'}
+                  {isSubmitting ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Updating...</> : (editingJobId && jobs.find(j => j.id === editingJobId)?.status === 'draft' ? 'Publish Role' : 'Save Changes')}
                 </Button>
               </DialogFooter>
             </form>
@@ -573,16 +810,38 @@ export default function JobsPage() {
         isLoading={isDeleting}
       />
 
-      <div className="flex items-center space-x-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Search roles or skills..."
-            className="pl-10 h-12 border-border shadow-sm"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+      <DeleteConfirmationDialog
+        isOpen={isClearDraftsDialogOpen}
+        onOpenChange={setIsClearDraftsDialogOpen}
+        onConfirm={confirmClearAllDrafts}
+        title="Clear All Drafts"
+        description={`Are you sure you want to delete all ${jobs.filter(j => j.status === 'draft').length} drafts? This action cannot be undone.`}
+        isLoading={isDeleting}
+      />
+
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div className="flex items-center space-x-4 flex-1">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+            <Input
+              type="search"
+              placeholder="Search roles or skills..."
+              className="pl-10 h-12 border-border shadow-sm"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+          {activeTab === 'draft' && jobs.some(j => j.status === 'draft') && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleClearAllDrafts}
+              className="border-destructive/20 text-destructive hover:bg-destructive/5 font-black text-[10px] uppercase tracking-widest h-12 px-6 rounded-xl"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Clear All Drafts
+            </Button>
+          )}
         </div>
       </div>
 

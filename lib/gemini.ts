@@ -130,6 +130,33 @@ export async function generateJobDetails(title: string, type: string) {
 }
 
 /**
+ * Recommends skills based on job title
+ */
+export async function recommendSkills(title: string) {
+  try {
+    const prompt = `
+      As a technical recruiter, suggest exactly 10 most relevant skills for the job title: "${title}".
+      Return them as a JSON object with a "skills" property containing an array of strings.
+      Example: { "skills": ["React", "TypeScript", "Node.js"] }
+    `;
+
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: prompt,
+      config: {
+        responseMimeType: 'application/json',
+      }
+    });
+
+    const data = JSON.parse(response.text || '{}');
+    return data.skills || [];
+  } catch (error) {
+    console.error('Skill recommendation error:', error);
+    return [];
+  }
+}
+
+/**
  * Screens multiple applicants against a job description
  */
 export async function screenApplicants(job: any, applicants: any[]) {

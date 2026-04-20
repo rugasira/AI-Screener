@@ -35,15 +35,61 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [globalSearch, setGlobalSearch] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [allSearchData, setAllSearchData] = useState<{jobs: any[], applicants: any[]}>({ jobs: [], applicants: [] });
 
   const handleGlobalSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (globalSearch.trim()) {
-      // Redirect to a specific page based on context or a general search page
-      // For now, let's just go to applicants and use the search query
-      navigate(`/admin/applicants?search=${encodeURIComponent(globalSearch)}`);
+      const query = globalSearch.toLowerCase();
+      if (query.includes('job') || query.includes('post')) {
+        navigate(`/admin/jobs?search=${encodeURIComponent(globalSearch)}`);
+      } else if (query.includes('dashboard')) {
+        navigate('/admin');
+      } else {
+        navigate(`/admin/applicants?search=${encodeURIComponent(globalSearch)}`);
+      }
+      setIsSearchOpen(false);
       setGlobalSearch('');
     }
+  };
+
+  useEffect(() => {
+    if (globalSearch.length > 1) {
+      setIsSearchOpen(true);
+      fetchSearchData();
+    } else {
+      setIsSearchOpen(false);
+    }
+  }, [globalSearch]);
+
+  const fetchSearchData = async () => {
+    if (allSearchData.jobs.length > 0) return;
+    try {
+      const [jobsSnap, appSnap] = await Promise.all([
+        getDocs(collection(db, 'jobs')),
+        getDocs(collection(db, 'applicants'))
+      ]);
+      setAllSearchData({
+        jobs: jobsSnap.docs.map(d => ({ id: d.id, ...d.data() })),
+        applicants: appSnap.docs.map(d => ({ id: d.id, ...d.data() }))
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const navigation = [
+    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
+    { name: 'Job Postings', href: '/admin/jobs', icon: Briefcase },
+    { name: 'Applicants', href: '/admin/applicants', icon: Users },
+    { name: 'Shortlisted', href: '/admin/shortlisted', icon: Award },
+  ];
+
+  const searchResults = {
+    nav: navigation.filter(n => n.name.toLowerCase().includes(globalSearch.toLowerCase())),
+    jobs: allSearchData.jobs.filter(j => j.title.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 3),
+    applicants: allSearchData.applicants.filter(a => a.name.toLowerCase().includes(globalSearch.toLowerCase())).slice(0, 3)
   };
 
   useEffect(() => {
@@ -90,13 +136,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       console.error('Error fetching notifications:', error);
     }
   };
-
-  const navigation = [
-    { name: 'Dashboard', href: '/admin', icon: LayoutDashboard },
-    { name: 'Job Postings', href: '/admin/jobs', icon: Briefcase },
-    { name: 'Applicants', href: '/admin/applicants', icon: Users },
-    { name: 'Shortlisted', href: '/admin/shortlisted', icon: Award },
-  ];
 
   return (
     <div className="flex h-screen bg-[#f1f5f9] text-slate-900 overflow-hidden font-sans">
@@ -155,7 +194,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     className={cn(
                       'group relative flex items-center text-sm font-black rounded-2xl transition-all duration-300',
                       isActive
-                        ? 'bg-slate-900 text-white shadow-2xl shadow-slate-900/20'
+                        ? 'bg-primary text-white shadow-2xl shadow-primary/20'
                         : 'text-slate-500 hover:bg-primary/5 hover:text-primary',
                       isSidebarCollapsed ? "justify-center h-14 w-14 mx-auto px-0" : "px-5 py-4"
                     )}
@@ -164,14 +203,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       className={cn(
                         'flex-shrink-0 transition-colors',
                         isSidebarCollapsed ? "h-6 w-6 mr-0" : "mr-4 h-5 w-5",
-                        isActive ? 'text-primary' : 'text-slate-400 group-hover:text-primary'
+                        isActive ? 'text-white' : 'text-slate-400 group-hover:text-primary'
                       )}
                     />
                     {!isSidebarCollapsed && item.name}
                     {isActive && !isSidebarCollapsed && (
                       <motion.div 
                         layoutId="active-nav-indicator"
-                        className="absolute right-4 w-1.5 h-1.5 rounded-full bg-primary"
+                        className="absolute right-4 w-1.5 h-1.5 rounded-full bg-slate-900"
                       />
                     )}
                   </Link>
@@ -239,16 +278,104 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <span className="font-black text-xl tracking-tighter text-slate-900">Umurava</span>
             </div>
             
-            <div className="hidden md:flex items-center relative max-w-md w-full">
-              <Search className="absolute left-4 h-4 w-4 text-slate-400" />
-              <form onSubmit={handleGlobalSearch} className="w-full">
-                <Input 
-                  placeholder="Search anything..." 
-                  value={globalSearch}
-                  onChange={(e) => setGlobalSearch(e.target.value)}
-                  className="pl-11 h-12 bg-slate-50 border-0 rounded-2xl focus-visible:ring-primary/20 font-medium w-full"
-                />
-              </form>
+            <div className="hidden md:flex items-center relative max-w-xl w-full">
+              <Search className="absolute left-4 h-4 w-4 text-slate-400 z-30" />
+              <div className="w-full relative">
+                <form onSubmit={handleGlobalSearch} className="w-full">
+                  <Input 
+                    placeholder="Search anything (jobs, candidates, settings...)" 
+                    value={globalSearch}
+                    onChange={(e) => setGlobalSearch(e.target.value)}
+                    onFocus={() => globalSearch.length > 1 && setIsSearchOpen(true)}
+                    className="pl-11 h-12 bg-slate-50 border-0 rounded-2xl focus-visible:ring-primary/20 font-medium w-full"
+                  />
+                </form>
+                
+                <AnimatePresence>
+                  {isSearchOpen && (globalSearch.length > 1) && (
+                    <>
+                      <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 10 }}
+                        className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl border border-slate-100 shadow-2xl overflow-hidden z-[60] p-2"
+                      >
+                        {searchResults.nav.length > 0 && (
+                          <div className="mb-2">
+                            <p className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Navigation</p>
+                            {searchResults.nav.map(n => (
+                              <button
+                                key={n.name}
+                                onClick={() => { navigate(n.href); setGlobalSearch(''); setIsSearchOpen(false); }}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-bold text-slate-600 transition-colors"
+                              >
+                                <n.icon className="h-4 w-4 text-slate-400" />
+                                {n.name}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {(searchResults.jobs.length > 0) && (
+                          <div className="mb-2">
+                            <p className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Matching Jobs</p>
+                            {searchResults.jobs.map(j => (
+                              <button
+                                key={j.id}
+                                onClick={() => { navigate(`/admin/jobs/${j.id}`); setGlobalSearch(''); setIsSearchOpen(false); }}
+                                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-bold text-slate-600 transition-colors"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Briefcase className="h-4 w-4 text-slate-400" />
+                                  {j.title}
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-slate-300" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {searchResults.applicants.length > 0 && (
+                          <div>
+                            <p className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Candidates</p>
+                            {searchResults.applicants.map(a => (
+                              <button
+                                key={a.id}
+                                onClick={() => { navigate(`/admin/applicants?search=${encodeURIComponent(a.name)}`); setGlobalSearch(''); setIsSearchOpen(false); }}
+                                className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl hover:bg-slate-50 text-sm font-bold text-slate-600 transition-colors"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <Users className="h-4 w-4 text-slate-400" />
+                                  {a.name}
+                                </div>
+                                <ChevronRight className="h-4 w-4 text-slate-300" />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {searchResults.nav.length === 0 && searchResults.jobs.length === 0 && searchResults.applicants.length === 0 && (
+                          <div className="p-8 text-center">
+                            <p className="text-sm font-bold text-slate-400">No direct matches found.</p>
+                            <Button 
+                              variant="link" 
+                              size="sm" 
+                              className="mt-2 text-primary font-black uppercase tracking-widest text-[10px]"
+                              onClick={handleGlobalSearch}
+                            >
+                              Press Enter for deep search
+                            </Button>
+                          </div>
+                        )}
+                      </motion.div>
+                      <div 
+                        className="fixed inset-0 z-50 bg-transparent" 
+                        onClick={() => setIsSearchOpen(false)} 
+                      />
+                    </>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
 
@@ -354,11 +481,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           className={cn(
                             'flex items-center px-5 py-4 text-base font-black rounded-2xl transition-all',
                             isActive
-                              ? 'bg-slate-900 text-white shadow-xl shadow-slate-900/20'
+                              ? 'bg-primary text-white shadow-xl shadow-primary/20'
                               : 'text-slate-500 hover:bg-primary/5 hover:text-primary'
                           )}
                         >
-                          <item.icon className={cn('mr-4 h-5 w-5', isActive ? 'text-primary' : 'text-slate-400')} />
+                          <item.icon className={cn('mr-4 h-5 w-5', isActive ? 'text-white' : 'text-slate-400')} />
                           {item.name}
                         </Link>
                       );
