@@ -399,12 +399,12 @@ export default function JobsPage() {
           <h1 className="text-4xl font-black tracking-tight text-foreground">Job Postings</h1>
           <p className="text-muted-foreground mt-1">Manage your active roles and AI screening workflows.</p>
           
-          <div className="flex bg-muted/50 p-1 rounded-xl w-fit mt-6 border border-border/50">
+          <div className="flex bg-muted/50 p-1 rounded-none w-fit mt-6 border border-border/50">
             <button
               onClick={() => setActiveTab('active')}
               className={cn(
-                "px-6 py-2 text-sm font-black rounded-lg transition-all",
-                activeTab === 'active' ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"
+                "px-6 py-2 text-sm font-black rounded-none transition-all",
+                activeTab === 'active' ? "bg-white text-primary shadow-none border border-slate-100" : "text-slate-500 hover:text-slate-700"
               )}
             >
               Active Roles
@@ -412,8 +412,8 @@ export default function JobsPage() {
             <button
               onClick={() => setActiveTab('draft')}
               className={cn(
-                "px-6 py-2 text-sm font-black rounded-lg transition-all",
-                activeTab === 'draft' ? "bg-white text-primary shadow-sm" : "text-slate-500 hover:text-slate-700"
+                "px-6 py-2 text-sm font-black rounded-none transition-all",
+                activeTab === 'draft' ? "bg-white text-primary shadow-none border border-slate-100" : "text-slate-500 hover:text-slate-700"
               )}
             >
               Drafts
@@ -877,112 +877,63 @@ export default function JobsPage() {
           variants={container}
           initial="hidden"
           animate="show"
-          className="grid gap-8 md:grid-cols-1 lg:grid-cols-2"
+          className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
         >
           {filteredJobs.map((job) => (
             <motion.div key={job.id} variants={item}>
-              <Card className="group overflow-hidden border-0 shadow-lg hover:shadow-2xl transition-all duration-300 h-full flex flex-col">
-                <div className="h-1.5 w-full bg-primary/20 group-hover:bg-primary transition-colors" />
-                <CardHeader className="pb-4">
-                  <div className="flex justify-between items-start">
-                    <div className="flex flex-col gap-2">
-                      <CardTitle className="text-3xl font-black group-hover:text-primary transition-colors line-clamp-1">
-                        {job.title}
-                      </CardTitle>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center w-fit rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary border border-primary/20 uppercase tracking-widest">
-                          {job.type === 'internship' ? 'Internship' : job.type === 'part-time' ? 'Part-time' : 'Full-time'}
-                        </span>
-                        <span className="text-xs font-bold text-slate-500">• {job.location}</span>
-                        {job.salaryRange && (
-                          <>
-                            <span className="text-slate-500">•</span>
-                            <span className="text-xs font-bold text-emerald-600 truncate max-w-[120px]">{job.salaryRange}</span>
-                          </>
-                        )}
-                      </div>
-                    </div>
+              <Card className="group overflow-hidden border border-slate-100 shadow-none hover:border-primary transition-all duration-300 h-full flex flex-col rounded-none bg-white">
+                <CardHeader className="p-4 pb-2">
+                  <div className="flex justify-between items-start gap-2">
+                    <CardTitle className="text-lg font-black group-hover:text-primary transition-colors line-clamp-1 leading-tight">
+                      {job.title}
+                    </CardTitle>
                     <DropdownMenu>
-                      <DropdownMenuTrigger className="-mt-2 -mr-2 hover:bg-muted rounded-full h-8 w-8 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
-                        <MoreVertical className="h-5 w-5" />
+                      <DropdownMenuTrigger className="shrink-0 h-7 w-7 flex items-center justify-center hover:bg-slate-100 rounded-none transition-colors">
+                        <MoreVertical className="h-4 w-4 text-slate-400" />
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem className="cursor-pointer py-2.5" onClick={() => openEditDialog(job)}>
-                          <Edit className="mr-2 h-4 w-4" />
+                      <DropdownMenuContent align="end" className="w-44 rounded-none">
+                        <DropdownMenuItem className="cursor-pointer text-sm" onClick={() => openEditDialog(job)}>
+                          <Edit className="mr-2 h-3.5 w-3.5" />
                           Edit Details
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer py-2.5" onClick={() => handleDeleteJob(job.id)}>
-                          <Trash2 className="mr-2 h-4 w-4" />
+                        <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/5 cursor-pointer text-sm" onClick={() => handleDeleteJob(job.id)}>
+                          <Trash2 className="mr-2 h-3.5 w-3.5" />
                           Delete Role
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  <CardDescription className="flex flex-col gap-2 mt-4">
-                    <div className="flex items-center text-xs font-medium">
-                      <Clock className="mr-1.5 h-3.5 w-3.5" />
-                      Posted {format(new Date(job.createdAt), 'MMM d, yyyy')}
-                    </div>
-                    {job.deadline && (
-                      <div className={`flex items-center text-xs font-bold ${differenceInDays(new Date(job.deadline), new Date()) <= 3 ? 'text-destructive' : 'text-amber-600'}`}>
-                        <Calendar className="mr-1.5 h-3.5 w-3.5" />
-                        Deadline: {format(new Date(job.deadline), 'MMM d, yyyy')} 
-                        <span className="ml-1 opacity-80">
-                          ({differenceInDays(new Date(job.deadline), new Date()) > 0 
-                            ? `${differenceInDays(new Date(job.deadline), new Date())}d left`
-                            : 'Expired'})
-                        </span>
-                      </div>
-                    )}
-                  </CardDescription>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[9px] font-black uppercase tracking-tighter px-1.5 py-0.5 rounded-none bg-primary/10 text-primary">
+                      {job.type === 'internship' ? 'Intern' : job.type === 'part-time' ? 'Part' : 'Full'}
+                    </span>
+                    <span className="text-[10px] font-bold text-slate-400 truncate max-w-[100px]">{job.location}</span>
+                  </div>
                 </CardHeader>
-                <CardContent className="flex-grow space-y-6">
-                  <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Clock className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Experience</span>
-                        <span className="text-lg font-black text-slate-900">{job.experience.replace(/[^0-9+]/g, '') || job.experience}</span>
-                      </div>
+                <CardContent className="px-4 py-2 flex-grow space-y-3">
+                  <div className="flex items-center justify-between text-[10px] py-2 border-t border-slate-50">
+                    <div className="flex flex-col">
+                      <span className="text-slate-400 font-bold uppercase tracking-widest text-[8px]">Exp</span>
+                      <span className="font-black text-slate-900">{job.experience.replace(/[^0-9+]/g, '') || job.experience}</span>
                     </div>
-                    <div className="h-10 w-[1px] bg-border" />
-                    <div className="flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-xl bg-emerald-100 flex items-center justify-center">
-                        <Target className="h-5 w-5 text-emerald-600" />
-                      </div>
-                      <div>
-                        <span className="block text-[10px] font-black uppercase tracking-widest text-slate-400">Target</span>
-                        <span className="text-lg font-black text-slate-900">{job.passingScore || 70}%</span>
-                      </div>
+                    <div className="flex flex-col text-right">
+                      <span className="text-slate-400 font-bold uppercase tracking-widest text-[8px]">Target</span>
+                      <span className="font-black text-emerald-600">{job.passingScore || 70}%</span>
                     </div>
                   </div>
-                  <div className="text-sm text-muted-foreground line-clamp-2 mb-6 leading-relaxed italic">
+                  <div className="text-[11px] text-slate-500 line-clamp-2 leading-tight">
                     {job.requirements}
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {job.skills.split(',').slice(0, 4).map((skill: string, i: number) => (
-                      <span key={i} className="bg-muted/50 text-muted-foreground text-[10px] font-bold px-2.5 py-1 rounded-md border border-border uppercase tracking-tighter">
-                        {skill.trim()}
-                      </span>
-                    ))}
-                    {job.skills.split(',').length > 4 && (
-                      <span className="text-[10px] font-bold text-muted-foreground/60 px-1 py-1">
-                        +{job.skills.split(',').length - 4} more
-                      </span>
-                    )}
-                  </div>
                 </CardContent>
-                <CardFooter className="pt-4 border-t border-border bg-muted/20 flex justify-end items-center">
-                  <div className="flex items-center gap-2">
-                    <Link to={`/admin/jobs/${job.id}`}>
-                      <Button variant="ghost" size="sm" className="font-bold group-hover:text-primary group-hover:bg-primary/10 transition-all">
-                        Manage
-                        <ChevronRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
-                      </Button>
-                    </Link>
-                  </div>
+                <CardFooter className="p-3 pt-0 mt-auto flex justify-between items-center bg-slate-50/50">
+                  <span className="text-[9px] font-medium text-slate-400 italic">
+                    Posted {format(new Date(job.createdAt), 'MMM d')}
+                  </span>
+                  <Link to={`/admin/jobs/${job.id}`}>
+                    <Button variant="link" size="sm" className="h-7 p-0 text-[10px] font-black uppercase tracking-widest text-primary hover:no-underline flex items-center group/btn">
+                      Manage <ChevronRight className="ml-0.5 h-3 w-3 group-hover/btn:translate-x-0.5 transition-transform" />
+                    </Button>
+                  </Link>
                 </CardFooter>
               </Card>
             </motion.div>

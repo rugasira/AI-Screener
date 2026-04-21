@@ -105,6 +105,9 @@ export default function JobDetailsPage() {
   const [isDeleteAllDialogOpen, setIsDeleteAllDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
   const { loadScripts, openPicker, accessToken } = useGooglePicker();
@@ -434,6 +437,14 @@ export default function JobDetailsPage() {
     (a.education && a.education.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const totalPages = Math.ceil(filteredApplicants.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedApplicants = filteredApplicants.slice(startIndex, startIndex + itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
@@ -462,14 +473,14 @@ export default function JobDetailsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center space-x-5">
           <Link to="/admin/jobs">
-            <Button variant="outline" size="icon" className="rounded-xl border-border hover:bg-white hover:shadow-md transition-all h-12 w-12">
+            <Button variant="outline" size="icon" className="rounded-none border-border hover:bg-white hover:shadow-none transition-all h-12 w-12">
               <ArrowLeft className="h-6 w-6" />
             </Button>
           </Link>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-black tracking-tight text-foreground">{job.title}</h1>
-              <span className="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-primary/20">
+              <span className="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-none uppercase tracking-widest border border-primary/20">
                 {job.type}
               </span>
             </div>
@@ -498,7 +509,7 @@ export default function JobDetailsPage() {
 
       <div className="grid gap-8 lg:grid-cols-3">
         <div className="lg:col-span-3 space-y-8">
-          <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
+          <Card className="border border-slate-100 shadow-none overflow-hidden rounded-none">
             <div className="h-2 w-full bg-primary" />
             <CardHeader className="pb-2">
               <CardTitle className="text-2xl font-black flex items-center gap-2">
@@ -507,7 +518,7 @@ export default function JobDetailsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-8 pt-4">
-              <div className="bg-muted/30 p-8 rounded-3xl border border-border/50 space-y-8">
+              <div className="bg-muted/30 p-8 rounded-none border border-border/50 space-y-8">
                 <div>
                   <h3 className="text-xs font-black text-primary uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-primary" />
@@ -546,7 +557,7 @@ export default function JobDetailsPage() {
                 </h3>
                 <div className="flex flex-wrap gap-2.5">
                   {job.skills ? job.skills.split(',').map((skill: string, i: number) => (
-                    <span key={i} className="bg-white text-slate-700 text-[11px] font-bold px-5 py-2 rounded-xl border border-slate-200 shadow-sm uppercase tracking-wider hover:border-primary/30 transition-colors cursor-default">
+                    <span key={i} className="bg-white text-slate-700 text-[11px] font-bold px-5 py-2 rounded-none border border-slate-200 shadow-none uppercase tracking-wider hover:border-primary/30 transition-colors cursor-default">
                       {skill.trim()}
                     </span>
                   )) : <span className="text-muted-foreground italic">No skills specified</span>}
@@ -555,7 +566,7 @@ export default function JobDetailsPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
+          <Card className="border border-slate-100 shadow-none overflow-hidden rounded-none">
             <div className="h-2 w-full bg-primary" />
             <CardHeader className="flex flex-col md:flex-row md:items-center justify-between space-y-4 md:space-y-0 pb-6">
               <div>
@@ -583,18 +594,18 @@ export default function JobDetailsPage() {
                   onChange={(e) => handleFileUpload(e, true)}
                 />
                 
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="h-9 font-bold rounded-lg px-3">
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="h-9 font-bold rounded-none px-3">
                   <FileText className="mr-2 h-4 w-4 text-primary" />
                   Upload
                 </Button>
                 
                 <DropdownMenu>
                   <DropdownMenuTrigger render={
-                    <Button variant="outline" size="sm" className="h-9 font-bold rounded-lg px-2">
+                    <Button variant="outline" size="sm" className="h-9 font-bold rounded-none px-2">
                       <Plus className="h-4 w-4" />
                     </Button>
                   } />
-                  <DropdownMenuContent align="end" className="w-48 rounded-xl font-bold">
+                  <DropdownMenuContent align="end" className="w-48 rounded-none font-bold">
                     <DropdownMenuItem onClick={() => folderInputRef.current?.click()} className="cursor-pointer">
                       <FolderOpen className="mr-2 h-4 w-4 text-primary" />
                       Upload Folder
@@ -616,7 +627,7 @@ export default function JobDetailsPage() {
                     placeholder="Search candidates..." 
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-9 h-10 border-border rounded-xl shadow-sm"
+                    className="pl-9 h-10 border-border rounded-none shadow-none"
                   />
                 </div>
 
@@ -624,14 +635,14 @@ export default function JobDetailsPage() {
                   onClick={handleScreen} 
                   disabled={screeningLoading || selectedApplicants.length === 0} 
                   size="sm"
-                  className="bg-primary hover:bg-primary/90 shadow-md shadow-primary/10 h-10 px-4 font-bold rounded-xl ml-auto"
+                  className="bg-primary hover:bg-primary/90 shadow-none h-10 px-4 font-bold rounded-none ml-auto"
                 >
                   <Sparkles className="mr-2 h-4 w-4" />
                   AI Screening
                 </Button>
 
                 {applicants.length > 0 && (
-                  <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 rounded-xl h-10 w-10 ml-2" onClick={handleDeleteAllApplicants}>
+                  <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 rounded-none h-10 w-10 ml-2" onClick={handleDeleteAllApplicants}>
                     <Trash2 className="h-5 w-5" />
                   </Button>
                 )}
@@ -646,8 +657,8 @@ export default function JobDetailsPage() {
                 message={screeningMessage}
               />
               <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if(!open) setPendingFiles([]); }}>
-                <DialogContent className="sm:max-w-[500px] rounded-2xl border-0 shadow-2xl p-0 overflow-hidden">
-                  <div className="bg-primary p-8 text-white">
+                <DialogContent className="sm:max-w-[500px] rounded-none border-0 shadow-none p-0 overflow-hidden">
+                  <div className="bg-primary p-8 text-white rounded-none">
                     <DialogTitle className="text-3xl font-black tracking-tight">Process Resumes</DialogTitle>
                     <DialogDescription className="text-primary-foreground/80 font-medium mt-2">
                       Review {pendingFiles.length} files.
@@ -655,7 +666,7 @@ export default function JobDetailsPage() {
                   </div>
                   <div className="p-8 space-y-6">
                     <Button 
-                      className="w-full h-14 rounded-2xl font-black text-lg shadow-xl shadow-primary/20"
+                      className="w-full h-14 rounded-none font-black text-lg shadow-none"
                       onClick={confirmUpload}
                     >
                       Process & Upload
@@ -681,7 +692,7 @@ export default function JobDetailsPage() {
                 description="Are you sure you want to remove ALL applicants for this job? This action cannot be undone."
                 isLoading={isDeleting}
               />
-              <div className="rounded-2xl border border-border overflow-hidden shadow-sm">
+              <div className="rounded-none border border-border overflow-hidden shadow-none">
                 <Table>
                   <TableHeader className="bg-muted/50">
                     <TableRow className="hover:bg-transparent border-border">
@@ -708,7 +719,7 @@ export default function JobDetailsPage() {
                     className="[&_tr:last-child]:border-0"
                   >
                     <AnimatePresence mode="popLayout">
-                      {filteredApplicants.length === 0 ? (
+                      {paginatedApplicants.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="h-40 text-center text-muted-foreground">
                             <motion.div 
@@ -722,9 +733,9 @@ export default function JobDetailsPage() {
                           </TableCell>
                         </TableRow>
                       ) : (
-                        filteredApplicants.map((applicant) => (
+                        paginatedApplicants.map((applicant, idx) => (
                           <motion.tr 
-                            key={applicant.id}
+                            key={`${applicant.id}-${idx}`}
                             variants={item}
                             className={cn(
                               "group cursor-pointer transition-all duration-200 border-border",
@@ -757,7 +768,7 @@ export default function JobDetailsPage() {
                                 <Link to={`/admin/screening/${id}/${screeningMap[applicant.id].screeningId}?applicantId=${applicant.id}`} onClick={(e) => e.stopPropagation()}>
                                   <div className="flex flex-col gap-1 group/status">
                                     <div className={cn(
-                                      "inline-flex items-center w-fit gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border",
+                                      "inline-flex items-center w-fit gap-1.5 px-2 py-0.5 rounded-none text-[10px] font-black uppercase tracking-wider border",
                                       screeningMap[applicant.id].matchScore >= (job.passingScore || 70)
                                         ? "bg-emerald-50 text-emerald-600 border-emerald-100"
                                         : "bg-rose-50 text-rose-600 border-rose-100"
@@ -778,7 +789,7 @@ export default function JobDetailsPage() {
                               )}
                             </TableCell>
                             <TableCell>
-                              <span className="bg-muted text-muted-foreground text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider border border-border">
+                              <span className="bg-muted text-muted-foreground text-[10px] font-black px-2.5 py-1 rounded-none uppercase tracking-wider border border-border">
                                 {applicant.source}
                               </span>
                             </TableCell>
@@ -787,10 +798,10 @@ export default function JobDetailsPage() {
                             </TableCell>
                             <TableCell onClick={(e) => e.stopPropagation()}>
                               <DropdownMenu>
-                                <DropdownMenuTrigger className="h-9 w-9 opacity-0 group-hover:opacity-100 transition-opacity rounded-xl flex items-center justify-center hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/20">
+                                <DropdownMenuTrigger className="h-9 w-9 opacity-0 group-hover:opacity-100 transition-opacity rounded-none flex items-center justify-center hover:bg-muted outline-none focus-visible:ring-2 focus-visible:ring-primary/20">
                                   <MoreVertical className="h-5 w-5" />
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuContent align="end" className="w-40 rounded-none">
                                   <DropdownMenuItem className="text-destructive font-bold focus:text-destructive focus:bg-destructive/5" onClick={() => handleDeleteApplicant(applicant.id)}>
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Remove
@@ -805,6 +816,31 @@ export default function JobDetailsPage() {
                   </motion.tbody>
                 </Table>
               </div>
+              <div className="px-6 py-4 border-t border-slate-50 flex items-center justify-between">
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+                  Page {currentPage} of {totalPages || 1}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 px-4 rounded-none font-bold border-slate-100"
+                    onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    Previous
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 px-4 rounded-none font-bold border-slate-100"
+                    onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
             </CardContent>
             {selectedApplicants.length > 0 && (
               <CardFooter className="bg-primary/5 border-t border-primary/10 py-4 flex justify-between items-center">
@@ -818,7 +854,7 @@ export default function JobDetailsPage() {
             )}
           </Card>
 
-          <Card className="border-0 shadow-xl overflow-hidden rounded-2xl mt-8">
+          <Card className="border border-slate-100 shadow-none overflow-hidden rounded-none mt-8">
             <div className="h-2 w-full bg-primary" />
             <CardHeader>
               <CardTitle className="text-2xl font-black flex items-center gap-2">
@@ -829,7 +865,7 @@ export default function JobDetailsPage() {
             </CardHeader>
             <CardContent>
               {screenings.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-2xl border border-dashed border-border text-center">
+                <div className="text-center py-12 text-muted-foreground bg-muted/20 rounded-none border border-dashed border-border text-center">
                   <AlertCircle className="h-10 w-10 mx-auto mb-3 opacity-20" />
                   <p className="text-sm font-bold">No screenings run yet.</p>
                 </div>
@@ -839,11 +875,11 @@ export default function JobDetailsPage() {
                     <div key={s.id} className="relative group">
                       <Link 
                         to={`/admin/screening/${id}/${s.id}`}
-                        className="flex items-center justify-between p-5 border border-border rounded-2xl hover:bg-white hover:shadow-lg hover:border-primary/30 transition-all overflow-hidden pr-12 w-full text-left"
+                        className="flex items-center justify-between p-5 border border-border rounded-none hover:bg-white hover:shadow-none hover:border-primary/30 transition-all overflow-hidden pr-12 w-full text-left"
                       >
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary transform -translate-x-full group-hover:translate-x-0 transition-transform" />
                         <div className="flex items-center gap-4">
-                          <div className="bg-primary/10 p-2.5 rounded-xl group-hover:bg-primary group-hover:text-white transition-colors">
+                          <div className="bg-primary/10 p-2.5 rounded-none group-hover:bg-primary group-hover:text-white transition-colors">
                             <CheckCircle2 className="h-5 w-5" />
                           </div>
                           <div>
@@ -861,7 +897,7 @@ export default function JobDetailsPage() {
                         variant="ghost" 
                         size="icon" 
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleDeleteScreening(s.id); }}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground h-8 w-8 hover:text-destructive hover:bg-destructive/10 rounded-lg group-hover:opacity-100 opacity-0 transition-opacity"
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground h-8 w-8 hover:text-destructive hover:bg-destructive/10 rounded-none group-hover:opacity-100 opacity-0 transition-opacity"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>

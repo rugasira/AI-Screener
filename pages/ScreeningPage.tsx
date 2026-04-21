@@ -1,7 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, AlertCircle, Star, Download, ChevronRight, Send, Mail } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { 
+  ArrowLeft, 
+  CheckCircle2, 
+  AlertCircle, 
+  Star, 
+  Download, 
+  ChevronRight, 
+  Send, 
+  Mail, 
+  Eye, 
+  FileText, 
+  User,
+  XCircle
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Card,
   CardContent,
@@ -23,6 +39,64 @@ import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { BatchEmailModal } from '@/components/BatchEmailModal';
 
+const ResumeViewer = ({ applicant }: { applicant: any }) => {
+  const text = applicant?.resumeText || applicant?.profileData?.resumeText;
+  
+  if (!text) {
+    return (
+      <div className="p-8 bg-white rounded-2xl border border-slate-100 shadow-sm space-y-6">
+        <div className="flex items-center gap-3 pb-4 border-b border-slate-50">
+          <div className="bg-primary/10 p-2 rounded-lg text-primary">
+            <User className="h-5 w-5" />
+          </div>
+          <h4 className="font-black text-slate-900 uppercase tracking-widest text-xs">Profile Information</h4>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {applicant?.profileData && Object.entries(applicant.profileData).map(([key, value]) => (
+            value && typeof value !== 'object' && key !== 'resumeText' && (
+              <div key={key} className="space-y-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">{key.replace(/([A-Z])/g, ' $1').trim()}</span>
+                <p className="text-sm font-bold text-slate-700">{String(value)}</p>
+              </div>
+            )
+          ))}
+        </div>
+        {(!applicant?.profileData || Object.keys(applicant.profileData).length === 0) && (
+          <p className="text-slate-400 italic text-center py-8">No detailed data available for this candidate.</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl overflow-hidden ring-1 ring-slate-200/50">
+      <div className="p-6 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+         <div className="flex items-center gap-3">
+           <div className="bg-primary p-2 rounded-xl text-white shadow-lg shadow-primary/20">
+             <FileText className="h-5 w-5" />
+           </div>
+           <div>
+             <h4 className="font-black text-slate-900 uppercase tracking-widest text-xs">Original Resume View</h4>
+             <p className="text-[10px] font-bold text-slate-400 mt-0.5">Scanned and verified by Umurava AI</p>
+           </div>
+         </div>
+         <Badge variant="secondary" className="bg-white text-emerald-600 border border-emerald-100 font-black text-[10px] px-3 py-1 rounded-lg shadow-sm">
+           <CheckCircle2 className="h-3 w-3 mr-1.5" />
+           DATA PERSISTED
+         </Badge>
+      </div>
+      <ScrollArea className="h-[600px] w-full bg-white">
+        <div className="p-12 font-serif text-slate-800 leading-[1.8] whitespace-pre-wrap text-base md:text-lg selection:bg-primary/20 selection:text-primary max-w-3xl mx-auto">
+          {text}
+        </div>
+      </ScrollArea>
+      <div className="p-4 bg-slate-50 border-t border-slate-100 text-center">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">End of Resume Document</p>
+      </div>
+    </div>
+  );
+};
+
 export default function ScreeningPage() {
   const { jobId, screeningId } = useParams();
   const [searchParams] = useSearchParams();
@@ -34,6 +108,14 @@ export default function ScreeningPage() {
   const [sendingEmails, setSendingEmails] = useState<Record<string, boolean>>({});
   const [sentEmails, setSentEmails] = useState<Record<string, boolean>>({});
   const [isBatchEmailOpen, setIsBatchEmailOpen] = useState(false);
+  const [openSourceData, setOpenSourceData] = useState<Record<number, string>>({});
+
+  const handleEmailDraftChange = (index: number, newDraft: string) => {
+    if (!screening) return;
+    const newResults = [...screening.results];
+    newResults[index] = { ...newResults[index], emailDraft: newDraft };
+    setScreening({ ...screening, results: newResults });
+  };
 
   useEffect(() => {
     fetchScreeningDetails();
@@ -358,21 +440,43 @@ export default function ScreeningPage() {
                     {!result.applicant?.email && (
                       <p className="text-xs text-rose-500 mb-2 font-medium">Cannot send: No email address found for this candidate.</p>
                     )}
-                    <div className="bg-white p-4 rounded-xl text-sm text-slate-700 whitespace-pre-wrap border border-slate-200">
-                      {result.emailDraft}
-                    </div>
+                    <Textarea 
+                      value={result.emailDraft}
+                      onChange={(e) => handleEmailDraftChange(index, e.target.value)}
+                      disabled={sentEmails[result.applicantId] || sendingEmails[result.applicantId]}
+                      className="bg-white p-4 rounded-xl text-sm text-slate-700 min-h-[150px] border border-slate-200 focus:ring-primary/20"
+                    />
                   </div>
                 )}
 
-                <div className="mt-6">
-                  <Accordion type="single" collapsible className="w-full">
-                    <AccordionItem value="profile" className="border-0 bg-slate-50 rounded-xl overflow-hidden">
-                      <AccordionTrigger className="text-xs uppercase font-bold tracking-wider text-slate-500 hover:text-slate-700 hover:no-underline px-4 py-3">
-                        View Original Profile Data
+                <div className="mt-10">
+                  <Accordion 
+                    type="single" 
+                    collapsible 
+                    className="w-full"
+                    value={openSourceData[index]}
+                    onValueChange={(val) => setOpenSourceData(prev => ({ ...prev, [index]: val }))}
+                  >
+                    <AccordionItem value="profile" className="border-0 shadow-none">
+                      <AccordionTrigger className="w-full h-16 bg-primary hover:bg-primary/95 text-white rounded-2xl px-6 data-[state=open]:rounded-b-none transition-all hover:no-underline">
+                        <div className="flex items-center gap-3">
+                          <Eye className="h-5 w-5" />
+                          <span className="font-black text-xs uppercase tracking-[0.2em]">View Original Source Data</span>
+                        </div>
                       </AccordionTrigger>
-                      <AccordionContent className="px-4 pb-4">
-                        <div className="bg-slate-800 p-3 rounded-lg text-xs font-mono text-slate-300 overflow-auto max-h-64 whitespace-pre-wrap">
-                          {JSON.stringify(result.applicant?.profileData, null, 2)}
+                      <AccordionContent className="p-0 border-x border-b border-slate-200 rounded-b-2xl overflow-hidden bg-slate-50/30">
+                        <div className="p-4 md:p-8 space-y-6">
+                          <ResumeViewer applicant={result.applicant} />
+                          <div className="flex justify-center pb-4">
+                            <Button 
+                              variant="ghost" 
+                              onClick={() => setOpenSourceData(prev => ({ ...prev, [index]: "" }))}
+                              className="text-slate-400 hover:text-slate-600 font-bold gap-2"
+                            >
+                              <XCircle className="h-4 w-4" />
+                              Close Source Data
+                            </Button>
+                          </div>
                         </div>
                       </AccordionContent>
                     </AccordionItem>

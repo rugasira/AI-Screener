@@ -45,7 +45,7 @@ export function ScreeningProgressModal({ isOpen, candidateCount, onClose, progre
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if(!open && onClose) onClose(); }}>
-      <DialogContent className="sm:max-w-[450px] rounded-3xl border-0 shadow-2xl p-0 overflow-hidden bg-white">
+      <DialogContent className="sm:max-w-[450px] rounded-none border-0 shadow-2xl p-0 overflow-hidden bg-white">
         <div className="bg-primary p-10 text-white relative overflow-hidden">
           {/* Animated background elements */}
           <motion.div 
@@ -66,7 +66,7 @@ export function ScreeningProgressModal({ isOpen, candidateCount, onClose, progre
           />
 
           <div className="relative z-10 flex flex-col items-center text-center">
-            <div className="bg-white/20 p-4 rounded-2xl backdrop-blur-md mb-6">
+            <div className="bg-white/20 p-4 rounded-none backdrop-blur-md mb-6">
               <Sparkles className="h-10 w-10 text-white animate-pulse" />
             </div>
             <h2 className="text-3xl font-black tracking-tight mb-2">AI Screening</h2>
@@ -125,8 +125,8 @@ export function ScreeningProgressModal({ isOpen, candidateCount, onClose, progre
             </div>
           </div>
 
-          <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100 flex items-center gap-3">
-            <div className="bg-white p-2 rounded-lg shadow-sm">
+          <div className="bg-slate-50 rounded-none p-4 border border-slate-100 flex items-center gap-3">
+            <div className="bg-white p-2 rounded-none shadow-sm">
               <Loader2 className="h-4 w-4 text-primary animate-spin" />
             </div>
             <p className="text-[11px] font-bold text-slate-500 leading-relaxed">

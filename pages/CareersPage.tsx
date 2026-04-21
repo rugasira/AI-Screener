@@ -81,7 +81,7 @@ export default function CareersPage() {
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
-            <div className="bg-primary p-2 rounded-xl shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
+            <div className="bg-primary p-2 rounded-none group-hover:scale-105 transition-transform">
               <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6">
                 <path d="M10 8.5A5 5 0 1 0 10 15.5" />
                 <path d="M14 15.5A5 5 0 1 0 14 8.5" />
@@ -102,16 +102,16 @@ export default function CareersPage() {
                       <User className="h-5 w-5 text-slate-600" />
                     </Button>
                   } />
-                  <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2">
+                  <DropdownMenuContent align="end" className="w-56 rounded-none p-2">
                     {['alexisahishakiye378@gmail.com', 'pine06858@gmail.com', 'admin@umurava.africa'].includes(user.email || '') && (
-                      <DropdownMenuItem className="rounded-xl font-bold py-3" render={
+                      <DropdownMenuItem className="rounded-none font-bold py-3" render={
                         <Link to="/admin" className="flex items-center">
                           <TrendingUp className="mr-2 h-4 w-4 text-primary" />
                           Admin Dashboard
                         </Link>
                       } />
                     )}
-                    <DropdownMenuItem onClick={logout} className="rounded-xl font-bold py-3 text-destructive focus:text-destructive focus:bg-destructive/5">
+                    <DropdownMenuItem onClick={logout} className="rounded-none font-bold py-3 text-destructive focus:text-destructive focus:bg-destructive/5">
                       <LogOut className="mr-2 h-4 w-4" />
                       Sign Out
                     </DropdownMenuItem>
@@ -119,7 +119,7 @@ export default function CareersPage() {
                 </DropdownMenu>
               </div>
             ) : (
-              <Link to="/login" className={buttonVariants({ variant: "default", className: "rounded-xl font-black px-6 h-11 shadow-lg shadow-primary/20" })}>
+              <Link to="/login" className={buttonVariants({ variant: "default", className: "rounded-none font-black px-6 h-11 shadow-none" })}>
                 Admin Login
               </Link>
             )}
@@ -129,10 +129,13 @@ export default function CareersPage() {
 
       <main>
         {/* Hero Section */}
-        <section className="bg-[#0a142f] text-white py-24 relative overflow-hidden">
+        <section className="bg-primary text-white py-24 relative overflow-hidden">
+          {/* Dot pattern utility */}
+          <div className="absolute inset-0 bg-dot-pattern text-white/10 pointer-events-none" />
+          
           <div className="absolute inset-0 overflow-hidden pointer-events-none">
-            <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-primary/20 blur-[120px]"></div>
-            <div className="absolute top-[40%] -right-[10%] w-[50%] h-[50%] rounded-full bg-blue-500/10 blur-[120px]"></div>
+            <div className="absolute -top-[20%] -left-[10%] w-[60%] h-[60%] rounded-full bg-white/10 blur-[120px]"></div>
+            <div className="absolute top-[40%] -right-[10%] w-[50%] h-[50%] rounded-full bg-white/5 blur-[120px]"></div>
           </div>
           
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10">
@@ -141,27 +144,27 @@ export default function CareersPage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6 }}
             >
-              <div className="inline-flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-full mb-8 backdrop-blur-sm">
-                <Sparkles className="h-4 w-4 text-primary" />
-                <span className="text-xs font-black uppercase tracking-widest text-white/80">Africa's Premier Talent Marketplace</span>
+              <div className="inline-flex items-center gap-2 bg-white/10 border border-white/20 px-4 py-2 rounded-none mb-8 backdrop-blur-sm">
+                <Sparkles className="h-4 w-4 text-white" />
+                <span className="text-xs font-black uppercase tracking-widest text-white">Africa's Premier Talent Marketplace</span>
               </div>
               <h1 className="text-5xl md:text-7xl font-black tracking-tight mb-8 leading-[1.1]">
                 Hire Africa's Vetted <br/>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">Digital Talents</span>
+                <span className="text-white drop-shadow-sm">Digital Talents</span>
               </h1>
-              <p className="text-xl max-w-3xl mx-auto text-white/60 mb-12 font-medium leading-relaxed">
+              <p className="text-xl max-w-3xl mx-auto text-white/80 mb-12 font-medium leading-relaxed">
                 Join thousands of companies outsourcing to Africa's top digital professionals. 
                 Vetted, ready, and specialized in high-growth careers.
               </p>
               
               <div className="max-w-2xl mx-auto relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-400 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
+                <div className="absolute -inset-1 bg-white/20 rounded-none blur opacity-0 group-hover:opacity-100 transition duration-1000 group-hover:duration-200"></div>
                 <div className="relative flex items-center">
                   <Search className="absolute left-5 h-6 w-6 text-slate-400" />
                   <Input 
                     type="text" 
                     placeholder="Search for your next career move..." 
-                    className="pl-14 h-16 bg-white text-slate-900 border-0 rounded-2xl shadow-2xl text-lg font-medium focus-visible:ring-2 focus-visible:ring-primary"
+                    className="pl-14 h-16 bg-white text-slate-900 border-0 rounded-none shadow-2xl text-lg font-medium focus-visible:ring-2 focus-visible:ring-white/50"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                   />
@@ -181,11 +184,11 @@ export default function CareersPage() {
             <Tabs defaultValue="available" className="w-full">
               <div className="flex flex-col md:flex-row items-center justify-between mb-12 gap-6">
                 <h2 className="text-3xl font-black text-slate-900 tracking-tight">Open Opportunities</h2>
-                <TabsList className="bg-slate-100 p-1.5 rounded-2xl h-14 border border-slate-200">
-                  <TabsTrigger value="available" className="rounded-xl px-8 font-black text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                <TabsList className="bg-slate-100 p-1.5 rounded-none h-14 border border-slate-200">
+                  <TabsTrigger value="available" className="rounded-none px-8 font-black text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
                     Available Positions
                   </TabsTrigger>
-                  <TabsTrigger value="applied" className="rounded-xl px-8 font-black text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                  <TabsTrigger value="applied" className="rounded-none px-8 font-black text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
                     My Applications ({appliedJobs.length})
                   </TabsTrigger>
                 </TabsList>
@@ -197,7 +200,7 @@ export default function CareersPage() {
                     <motion.div 
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="text-center py-24 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200"
+                      className="text-center py-24 bg-white rounded-none border-2 border-dashed border-slate-200"
                     >
                       <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
                         <Briefcase className="h-10 w-10 text-slate-300" />
@@ -214,10 +217,10 @@ export default function CareersPage() {
                     >
                       {availableJobs.map((job) => (
                         <motion.div key={job.id} variants={item}>
-                          <Card className="group h-full flex flex-col bg-white border-slate-200 rounded-[2rem] overflow-hidden hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300">
+                          <Card className="group h-full flex flex-col bg-white border-slate-200 rounded-none overflow-hidden hover:shadow-2xl hover:shadow-primary/5 hover:-translate-y-1 transition-all duration-300">
                             <CardHeader className="pb-4">
                               <div className="flex justify-between items-start mb-4">
-                                <div className="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-primary/10">
+                                <div className="bg-primary/10 text-primary text-[10px] font-black px-3 py-1 rounded-none uppercase tracking-widest border border-primary/10">
                                   {job.type}
                                 </div>
                                 {job.deadline && (
@@ -247,7 +250,7 @@ export default function CareersPage() {
                               </p>
                               <div className="flex flex-wrap gap-2">
                                 {job.skills.split(',').slice(0, 3).map((skill: string, i: number) => (
-                                  <span key={i} className="bg-slate-50 text-slate-600 text-[10px] font-black px-3 py-1.5 rounded-lg border border-slate-100 uppercase tracking-wider">
+                                  <span key={i} className="bg-slate-50 text-slate-600 text-[10px] font-black px-3 py-1.5 rounded-none border border-slate-100 uppercase tracking-wider">
                                     {skill.trim()}
                                   </span>
                                 ))}
@@ -259,7 +262,7 @@ export default function CareersPage() {
                               </div>
                             </CardContent>
                             <CardFooter className="pt-6 border-t border-slate-50 px-8 pb-8">
-                              <div className="w-full text-center py-3 bg-slate-50 rounded-xl text-slate-400 font-black text-sm border border-slate-100">
+                              <div className="w-full text-center py-3 bg-slate-50 rounded-none text-slate-400 font-black text-sm border border-slate-100">
                                 Internal Role
                               </div>
                             </CardFooter>
@@ -277,16 +280,16 @@ export default function CareersPage() {
                     <motion.div 
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="text-center py-24 bg-white rounded-[2.5rem] border-2 border-dashed border-slate-200"
+                      className="text-center py-24 bg-white rounded-none border-2 border-dashed border-slate-200"
                     >
-                      <div className="bg-green-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <CheckCircle2 className="h-10 w-10 text-green-400" />
+                      <div className="bg-slate-50 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Briefcase className="h-10 w-10 text-slate-300" />
                       </div>
                       <h3 className="text-2xl font-black text-slate-900">No applications yet</h3>
                       <p className="mt-2 text-slate-500 font-medium">Your submitted applications will appear here.</p>
                       <Button 
                         variant="outline" 
-                        className="mt-8 rounded-xl font-black border-slate-200" 
+                        className="mt-8 rounded-none font-black border-slate-200" 
                         onClick={() => document.querySelector<HTMLButtonElement>('[value="available"]')?.click()}
                       >
                         Browse Positions
@@ -301,10 +304,10 @@ export default function CareersPage() {
                     >
                       {appliedJobs.map((job) => (
                         <motion.div key={job.id} variants={item}>
-                          <Card className="h-full flex flex-col bg-white border-green-100 rounded-[2rem] overflow-hidden shadow-xl shadow-green-500/5">
+                          <Card className="h-full flex flex-col bg-white border-green-100 rounded-none overflow-hidden shadow-xl shadow-green-500/5">
                             <CardHeader>
                               <div className="flex justify-between items-start mb-4">
-                                <div className="bg-green-50 text-green-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest border border-green-100 flex items-center gap-1.5">
+                                <div className="bg-green-50 text-green-600 text-[10px] font-black px-3 py-1 rounded-none uppercase tracking-widest border border-green-100 flex items-center gap-1.5">
                                   <CheckCircle2 className="h-3 w-3" />
                                   Submitted
                                 </div>
@@ -322,7 +325,7 @@ export default function CareersPage() {
                               </p>
                             </CardContent>
                             <CardFooter className="pt-6 border-t border-slate-50 px-8 pb-8">
-                              <div className="w-full text-center py-3 bg-green-50 rounded-xl text-green-600 font-black text-sm border border-green-100">
+                              <div className="w-full text-center py-3 bg-green-50 rounded-none text-green-600 font-black text-sm border border-green-100">
                                 Application Logged
                               </div>
                             </CardFooter>

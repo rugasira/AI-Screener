@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Briefcase, Users, Settings, LogOut, Menu, X, ExternalLink, Sparkles, LayoutDashboard, ChevronRight, Bell, Search, AlertCircle, Award } from 'lucide-react';
+import { Briefcase, Users, Settings, LogOut, Menu, X, ExternalLink, Sparkles, LayoutDashboard, ChevronRight, Bell, Search, AlertCircle, Award, User, Shield } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
@@ -84,6 +84,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     { name: 'Job Postings', href: '/admin/jobs', icon: Briefcase },
     { name: 'Applicants', href: '/admin/applicants', icon: Users },
     { name: 'Shortlisted', href: '/admin/shortlisted', icon: Award },
+    { name: 'Settings', href: '/admin/settings', icon: Settings },
   ];
 
   const searchResults = {
@@ -149,7 +150,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           isSidebarCollapsed ? "justify-center px-0" : "px-8"
         )}>
           <Link to="/admin" className="flex items-center gap-3 group">
-            <div className="bg-primary p-2.5 rounded-2xl shadow-xl shadow-primary/20 group-hover:scale-110 transition-transform duration-300 shrink-0">
+            <div className="bg-primary p-2.5 rounded-none group-hover:scale-110 transition-transform duration-300 shrink-0">
               <UmuravaLogo className="h-7 w-7 text-white" />
             </div>
             {!isSidebarCollapsed && (
@@ -192,27 +193,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     key={item.name}
                     to={item.href}
                     className={cn(
-                      'group relative flex items-center text-sm font-black rounded-2xl transition-all duration-300',
+                      'group relative flex items-center text-sm font-black transition-all duration-300',
                       isActive
-                        ? 'bg-primary text-white shadow-2xl shadow-primary/20'
-                        : 'text-slate-500 hover:bg-primary/5 hover:text-primary',
+                        ? 'text-slate-900'
+                        : 'text-slate-500 hover:text-primary',
                       isSidebarCollapsed ? "justify-center h-14 w-14 mx-auto px-0" : "px-5 py-4"
                     )}
                   >
+                    {isActive && (
+                      <motion.div 
+                        layoutId="active-nav-indicator"
+                        className="absolute left-0 w-1 h-8 bg-primary rounded-r-full"
+                      />
+                    )}
                     <item.icon
                       className={cn(
                         'flex-shrink-0 transition-colors',
                         isSidebarCollapsed ? "h-6 w-6 mr-0" : "mr-4 h-5 w-5",
-                        isActive ? 'text-white' : 'text-slate-400 group-hover:text-primary'
+                        isActive ? 'text-primary' : 'text-slate-400 group-hover:text-primary'
                       )}
                     />
                     {!isSidebarCollapsed && item.name}
-                    {isActive && !isSidebarCollapsed && (
-                      <motion.div 
-                        layoutId="active-nav-indicator"
-                        className="absolute right-4 w-1.5 h-1.5 rounded-full bg-slate-900"
-                      />
-                    )}
                   </Link>
                 );
               })}
@@ -227,11 +228,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {user && !isSidebarCollapsed && (
             <div className="flex items-center gap-4 mb-8 px-2">
               <div className="relative group">
-                <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-400 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-1000"></div>
+                <div className="absolute -inset-1 bg-primary/20 rounded-none blur opacity-0 group-hover:opacity-40 transition duration-1000"></div>
                 {user.photoURL ? (
-                  <img src={user.photoURL} alt={user.displayName || 'User'} className="relative h-12 w-12 rounded-2xl object-cover border-2 border-white shadow-sm" referrerPolicy="no-referrer" />
+                  <img src={user.photoURL} alt={user.displayName || 'User'} className="relative h-12 w-12 rounded-none object-cover border-2 border-white" referrerPolicy="no-referrer" />
                 ) : (
-                  <div className="relative h-12 w-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black border-2 border-white shadow-sm">
+                  <div className="relative h-12 w-12 rounded-none bg-slate-900 text-white flex items-center justify-center font-black border-2 border-white">
                     {user.displayName?.charAt(0) || user.email?.charAt(0) || 'A'}
                   </div>
                 )}
@@ -246,7 +247,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           
           {user && isSidebarCollapsed && (
             <div className="flex justify-center mb-8">
-               <div className="h-12 w-12 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black border-2 border-white shadow-sm">
+               <div className="h-12 w-12 rounded-none bg-slate-900 text-white flex items-center justify-center font-black border-2 border-white shadow-sm">
                   {user.displayName?.charAt(0) || user.email?.charAt(0) || 'A'}
                </div>
             </div>
@@ -381,16 +382,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <div className="flex items-center gap-4">
             <DropdownMenu>
-              <DropdownMenuTrigger className="rounded-2xl h-12 w-12 bg-slate-50 border border-slate-100 hover:bg-slate-100 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
+              <DropdownMenuTrigger onClick={() => navigate('/admin/settings')} className="rounded-2xl h-12 w-12 bg-slate-50 border border-slate-100 hover:bg-slate-100 flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
                 <Settings className="h-5 w-5 text-slate-600" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 rounded-2xl p-2 font-bold">
-                <DropdownMenuLabel>Settings</DropdownMenuLabel>
+                <DropdownMenuGroup>
+                  <DropdownMenuLabel className="px-3 py-2 text-xs font-black uppercase tracking-widest text-slate-400">Settings</DropdownMenuLabel>
+                </DropdownMenuGroup>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">Account Profile</DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">AI Configuration</DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">Billing & Subscription</DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl py-3 cursor-pointer">Organization Settings</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/admin/settings')} className="rounded-xl py-3 cursor-pointer">
+                  <User className="mr-2 h-4 w-4" />
+                  Admin Accounts
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/admin/settings')} className="rounded-xl py-3 cursor-pointer">
+                  <Shield className="mr-2 h-4 w-4" />
+                  Security
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/admin/settings')} className="rounded-xl py-3 cursor-pointer text-slate-400 cursor-not-allowed">
+                  <Award className="mr-2 h-4 w-4" />
+                  AI Configuration
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/admin/settings')} className="rounded-xl py-3 cursor-pointer text-slate-400 cursor-not-allowed">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Organization
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
 

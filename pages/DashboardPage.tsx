@@ -61,15 +61,18 @@ export default function DashboardPage() {
         const screeningsSnapshot = await getDocs(collection(db, 'screenings'));
         const screeningsList = screeningsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-        // Extract top candidates from screenings
+        // Extract unique top candidates from screenings
         const allScreenedCandidates: any[] = [];
+        const seenCandidateIds = new Set();
+
         screeningsList.forEach((s: any) => {
           if (s.results && Array.isArray(s.results)) {
             s.results.forEach((res: any) => {
-              // Only show candidates with matchScore > 85
               if (res.matchScore > 85) {
                 const applicant = applicantsList.find(a => a.id === res.applicantId);
-                if (applicant) {
+                // Ensure we only show each applicant once in the top list
+                if (applicant && !seenCandidateIds.has(res.applicantId)) {
+                  seenCandidateIds.add(res.applicantId);
                   allScreenedCandidates.push({
                     ...applicant,
                     matchScore: res.matchScore,
@@ -153,7 +156,7 @@ export default function DashboardPage() {
     fetchDashboardData();
   }, []);
 
-  const COLORS = ['#0f172a', '#3b82f6', '#10b981', '#f59e0b'];
+  const COLORS = ['#0f172a', '#4F7CAC', '#10b981', '#f59e0b'];
 
   const pieData = [
     { name: 'Passed', value: stats.passedApplicants },
@@ -181,7 +184,7 @@ export default function DashboardPage() {
         </div>
         <div className="flex gap-3">
           <Link to="/admin/jobs">
-            <Button className="bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 h-11 px-6 rounded-xl font-bold">
+            <Button className="bg-primary hover:bg-primary/90 shadow-none h-11 px-6 rounded-none font-bold">
               Manage Postings
             </Button>
           </Link>
@@ -190,11 +193,11 @@ export default function DashboardPage() {
 
       {/* Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="rounded-2xl border-0 shadow-lg relative overflow-hidden bg-white">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-full blur-3xl -mr-10 -mt-10 opacity-70" />
+        <Card className="rounded-none border shadow-none relative overflow-hidden bg-white">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-secondary rounded-full blur-3xl -mr-10 -mt-10 opacity-70" />
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
-              <div className="bg-blue-100/50 p-3 rounded-2xl text-blue-600">
+              <div className="bg-secondary p-3 rounded-none text-primary">
                 <Briefcase className="h-6 w-6" />
               </div>
               <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total</span>
@@ -206,11 +209,11 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-0 shadow-lg relative overflow-hidden bg-slate-900 text-white">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-10 -mt-10" />
+        <Card className="rounded-none border shadow-none relative overflow-hidden bg-slate-900 text-white">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-10 -mt-10" />
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
-              <div className="bg-white/10 p-3 rounded-2xl text-blue-300">
+              <div className="bg-white/10 p-3 rounded-none text-primary-foreground">
                 <Users className="h-6 w-6" />
               </div>
               <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Total</span>
@@ -222,11 +225,11 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-0 shadow-lg relative overflow-hidden bg-white">
+        <Card className="rounded-none border shadow-none relative overflow-hidden bg-white">
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-3xl -mr-10 -mt-10 opacity-70" />
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
-              <div className="bg-emerald-100/50 p-3 rounded-2xl text-emerald-600">
+              <div className="bg-emerald-100/50 p-3 rounded-none text-emerald-600">
                 <CheckCircle2 className="h-6 w-6" />
               </div>
               <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Screened</span>
@@ -238,11 +241,11 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-0 shadow-lg relative overflow-hidden bg-white">
+        <Card className="rounded-none border shadow-none relative overflow-hidden bg-white">
           <div className="absolute top-0 right-0 w-32 h-32 bg-amber-50 rounded-full blur-3xl -mr-10 -mt-10 opacity-70" />
           <CardContent className="p-6 relative z-10">
             <div className="flex items-center justify-between">
-              <div className="bg-amber-100/50 p-3 rounded-2xl text-amber-600">
+              <div className="bg-amber-100/50 p-3 rounded-none text-amber-600">
                 <TrendingUp className="h-6 w-6" />
               </div>
               <span className="text-[10px] uppercase font-black tracking-widest text-slate-400">Shortlisted</span>
@@ -257,8 +260,8 @@ export default function DashboardPage() {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-2 rounded-2xl border-0 shadow-lg bg-white">
-          <CardHeader className="border-b border-slate-50 pb-6">
+        <Card className="lg:col-span-2 rounded-none border shadow-none bg-white">
+          <CardHeader className="pb-6">
             <CardTitle className="text-xl font-black flex items-center gap-2">
               <Activity className="h-5 w-5 text-primary" />
               Application Volume
@@ -300,8 +303,8 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="rounded-2xl border-0 shadow-lg bg-white">
-          <CardHeader className="border-b border-slate-50 pb-6">
+        <Card className="rounded-none border shadow-none bg-white">
+          <CardHeader className="pb-6">
             <CardTitle className="text-xl font-black">Screening Status</CardTitle>
             <CardDescription className="text-xs font-bold uppercase tracking-widest mt-1">
               Applicant Pipeline Breakdown
@@ -351,8 +354,8 @@ export default function DashboardPage() {
       {/* Recent Activity Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent Jobs */}
-        <Card className="rounded-2xl border-0 shadow-lg bg-white">
-          <CardHeader className="border-b border-slate-50 flex flex-row items-center justify-between pb-6">
+        <Card className="rounded-none border shadow-none bg-white">
+          <CardHeader className="flex flex-row items-center justify-between pb-6">
             <div>
               <CardTitle className="text-xl font-black">Recent Jobs</CardTitle>
               <CardDescription className="text-xs font-bold uppercase tracking-widest mt-1">
@@ -384,7 +387,7 @@ export default function DashboardPage() {
                         const statusColor = displayStatus === 'Active' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500';
                         
                         return (
-                          <span className={cn("text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider", statusColor)}>
+                          <span className={cn("text-xs font-black px-3 py-1 rounded-none uppercase tracking-wider", statusColor)}>
                             {displayStatus}
                           </span>
                         );
@@ -398,8 +401,8 @@ export default function DashboardPage() {
         </Card>
 
         {/* Top Screened Candidates */}
-        <Card className="rounded-2xl border-0 shadow-lg bg-white">
-          <CardHeader className="border-b border-slate-50 flex flex-row items-center justify-between pb-6">
+        <Card className="rounded-none border shadow-none bg-white">
+          <CardHeader className="flex flex-row items-center justify-between pb-6">
             <div>
               <CardTitle className="text-xl font-black">Top Candidates</CardTitle>
               <CardDescription className="text-xs font-bold uppercase tracking-widest mt-1">
@@ -417,11 +420,11 @@ export default function DashboardPage() {
                   Perform a screening to see top candidates
                 </div>
               ) : (
-                topCandidates.map(applicant => {
+                topCandidates.map((applicant, idx) => {
                   return (
-                    <div key={applicant.id} className="p-6 hover:bg-slate-50 transition-colors flex items-center justify-between">
+                    <div key={`${applicant.id}-${idx}`} className="p-6 hover:bg-slate-50 transition-colors flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-600">
+                        <div className="h-10 w-10 rounded-none bg-slate-100 flex items-center justify-center font-black text-slate-600">
                           {applicant.name?.charAt(0) || 'A'}
                         </div>
                         <div>
@@ -433,7 +436,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="text-right">
                         <div className={cn(
-                          "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider",
+                          "px-3 py-1 rounded-none text-[10px] font-black uppercase tracking-wider",
                           applicant.matchScore >= 85 ? "bg-emerald-100 text-emerald-700" : "bg-blue-100 text-blue-700"
                         )}>
                           {applicant.matchScore}% Match

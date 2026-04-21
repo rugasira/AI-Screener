@@ -112,6 +112,9 @@ export default function ApplicantsPage() {
   const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 15;
+  
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -239,7 +242,12 @@ export default function ApplicantsPage() {
     try {
       const applicantsToScreen = applicants.filter(a => selectedApplicants.includes(a.id));
       
-      const screeningResults = await screenApplicants(job, applicantsToScreen);
+      const rawResults = await screenApplicants(job, applicantsToScreen);
+      
+      // Deduplicate results by applicantId just in case
+      const screeningResults = Array.from(
+        new Map(rawResults.map((r: any) => [r.applicantId, r])).values()
+      );
 
       const res = await fetch('/api/screenings', {
         method: 'POST',
@@ -366,6 +374,14 @@ export default function ApplicantsPage() {
     return matchesSearch && matchesJob;
   });
 
+  const totalPages = Math.ceil(filteredApplicants.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const paginatedApplicants = filteredApplicants.slice(startIndex, startIndex + itemsPerPage);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, jobFilter]);
+
   return (
     <div className="space-y-8 max-w-7xl mx-auto pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -376,7 +392,7 @@ export default function ApplicantsPage() {
         <div className="flex items-center gap-3">
           {selectedApplicants.length > 0 && jobFilter !== 'all' && (
             <Button 
-              className="bg-primary hover:bg-primary/90 font-bold shadow-lg shadow-primary/20 h-11 px-6 rounded-xl animate-in fade-in slide-in-from-right-4 duration-300"
+              className="bg-primary hover:bg-primary/90 font-bold shadow-none h-11 px-6 rounded-none animate-in fade-in slide-in-from-right-4 duration-300"
               onClick={handleBulkScreen}
               disabled={screeningLoading}
             >
@@ -386,12 +402,12 @@ export default function ApplicantsPage() {
           )}
           <Dialog open={isUploadOpen} onOpenChange={(open) => { setIsUploadOpen(open); if(!open) setPendingFiles([]); }}>
             <DialogTrigger render={
-              <Button className="bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/20 h-11 px-6 rounded-xl font-bold transition-all duration-300">
+              <Button className="bg-primary hover:bg-primary/90 text-white shadow-none h-11 px-6 rounded-none font-bold transition-all duration-300">
                 <Upload className="mr-2 h-5 w-5" />
                 Bulk Upload
               </Button>
             } />
-            <DialogContent className="sm:max-w-[500px] rounded-2xl border-0 shadow-2xl p-0 overflow-hidden">
+            <DialogContent className="sm:max-w-[500px] rounded-none border-0 shadow-2xl p-0 overflow-hidden">
               <div className="bg-primary p-8 text-white">
                 <DialogTitle className="text-3xl font-black tracking-tight">Bulk Upload</DialogTitle>
                 <DialogDescription className="text-primary-foreground/80 font-medium mt-2">
@@ -402,14 +418,14 @@ export default function ApplicantsPage() {
                 <div className="space-y-2">
                   <Label className="font-black text-xs uppercase tracking-widest text-slate-400">Target Job Posting</Label>
                   <Select value={uploadJobId} onValueChange={setUploadJobId}>
-                    <SelectTrigger className="h-14 border-slate-100 bg-slate-50 rounded-2xl focus:ring-primary/20">
+                    <SelectTrigger className="h-14 border-slate-100 bg-slate-50 rounded-none focus:ring-primary/20">
                       <SelectValue placeholder="Choose a job role...">
                         {uploadJobId ? jobs[uploadJobId]?.title : "Choose a job role..."}
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent className="rounded-2xl border-slate-100">
+                    <SelectContent className="rounded-none border-slate-100">
                       {Object.values(jobs).map((job: any) => (
-                        <SelectItem key={job.id} value={job.id} className="py-3 rounded-xl">{job.title}</SelectItem>
+                        <SelectItem key={job.id} value={job.id} className="py-3 rounded-none">{job.title}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -419,29 +435,29 @@ export default function ApplicantsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <Button 
                       variant="outline" 
-                      className="h-32 flex flex-col gap-3 rounded-2xl border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group"
+                      className="h-32 flex flex-col gap-3 rounded-none border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploading || !uploadJobId}
                     >
-                      <div className="bg-slate-50 p-3 rounded-xl group-hover:bg-white transition-colors">
+                      <div className="bg-slate-50 p-3 rounded-none group-hover:bg-white transition-colors">
                         <FileText className="h-6 w-6 text-slate-400 group-hover:text-primary" />
                       </div>
                       <span className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-primary">Select Files</span>
                     </Button>
                     <Button 
                       variant="outline" 
-                      className="h-32 flex flex-col gap-3 rounded-2xl border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group"
+                      className="h-32 flex flex-col gap-3 rounded-none border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group"
                       onClick={() => folderInputRef.current?.click()}
                       disabled={uploading || !uploadJobId}
                     >
-                      <div className="bg-slate-50 p-3 rounded-xl group-hover:bg-white transition-colors">
+                      <div className="bg-slate-50 p-3 rounded-none group-hover:bg-white transition-colors">
                         <FolderOpen className="h-6 w-6 text-slate-400 group-hover:text-primary" />
                       </div>
                       <span className="text-xs font-black uppercase tracking-widest text-slate-500 group-hover:text-primary">Select Folder</span>
                     </Button>
                     <Button 
                       variant="outline" 
-                      className="h-32 flex flex-col gap-3 rounded-2xl border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group col-span-2"
+                      className="h-32 flex flex-col gap-3 rounded-none border-2 border-dashed border-slate-100 hover:border-primary hover:bg-primary/5 transition-all group col-span-2"
                       onClick={() => openPicker(handleDriveSelect)}
                       disabled={uploading || !uploadJobId}
                     >
@@ -562,7 +578,7 @@ export default function ApplicantsPage() {
         <motion.div 
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-slate-900 border border-slate-800 p-4 flex justify-between items-center px-6 rounded-2xl shadow-xl"
+          className="bg-slate-900 border border-slate-800 p-4 flex justify-between items-center px-6 rounded-none shadow-none"
         >
           <div className="flex items-center gap-4">
             <span className="text-sm font-black text-white">
@@ -580,7 +596,7 @@ export default function ApplicantsPage() {
           <div className="flex items-center gap-3">
             {jobFilter !== 'all' && (
               <Button 
-                className="bg-primary hover:bg-primary/90 font-bold h-10 px-5 rounded-xl border-0 shadow-lg shadow-primary/20"
+                className="bg-primary hover:bg-primary/90 font-bold h-10 px-5 rounded-none border-0 shadow-none"
                 onClick={handleBulkScreen}
                 disabled={screeningLoading}
               >
@@ -590,7 +606,7 @@ export default function ApplicantsPage() {
             )}
             <Button 
               variant="destructive" 
-              className="font-bold h-10 px-5 rounded-xl border-0 shadow-lg shadow-destructive/20"
+              className="font-bold h-10 px-5 rounded-none border-0 shadow-none"
               onClick={handleBulkDelete}
             >
               <Trash2 className="mr-2 h-4 w-4" />
@@ -600,7 +616,7 @@ export default function ApplicantsPage() {
         </motion.div>
       )}
 
-      <Card className="border-0 shadow-xl overflow-hidden rounded-2xl">
+      <Card className="border border-slate-100 shadow-none overflow-hidden rounded-none">
         <div className="h-2 w-full bg-primary" />
         <CardHeader className="pb-2">
           <CardTitle className="text-2xl font-black flex items-center gap-2">
@@ -654,9 +670,9 @@ export default function ApplicantsPage() {
                   className="[&_tr:last-child]:border-0"
                 >
                   <AnimatePresence mode="popLayout">
-                    {filteredApplicants.map((applicant) => (
+                    {paginatedApplicants.map((applicant, idx) => (
                       <motion.tr 
-                        key={applicant.id}
+                        key={`${applicant.id}-${idx}`}
                         variants={item}
                         className={cn(
                           "group hover:bg-muted/30 transition-colors border-border cursor-pointer",
@@ -730,9 +746,9 @@ export default function ApplicantsPage() {
                           </TableCell>
                           <TableCell>
                             <span className={cn(
-                              "text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider border",
+                              "text-[10px] font-black px-2.5 py-1 rounded-none uppercase tracking-wider border",
                               applicant.source === 'upload' 
-                                ? "bg-blue-50 text-blue-600 border-blue-100" 
+                                ? "bg-secondary text-primary border-primary/20" 
                                 : "bg-green-50 text-green-600 border-green-100"
                             )}>
                               {applicant.source || 'Direct'}
@@ -740,7 +756,7 @@ export default function ApplicantsPage() {
                           </TableCell>
                           <TableCell className="pr-6 text-right">
                             <DropdownMenu>
-                              <DropdownMenuTrigger className="h-9 w-9 rounded-xl hover:bg-muted flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
+                              <DropdownMenuTrigger className="h-9 w-9 rounded-none hover:bg-muted flex items-center justify-center outline-none focus-visible:ring-2 focus-visible:ring-primary/20 transition-colors">
                                 <MoreVertical className="h-5 w-5" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48">
@@ -770,6 +786,31 @@ export default function ApplicantsPage() {
             </div>
           )}
         </CardContent>
+        <CardFooter className="p-4 border-t border-slate-50 flex items-center justify-between">
+          <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            Page {currentPage} of {totalPages || 1}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 px-4 rounded-xl font-bold border-slate-100"
+              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-9 px-4 rounded-xl font-bold border-slate-100"
+              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages || totalPages === 0}
+            >
+              Next
+            </Button>
+          </div>
+        </CardFooter>
       </Card>
     </div>
   );

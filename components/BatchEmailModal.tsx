@@ -9,7 +9,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { CheckCircle2, Send, Mail, X, Loader2, AlertCircle } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { CheckCircle2, Send, Mail, X, Loader2, AlertCircle, Edit3 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
@@ -91,31 +92,38 @@ export function BatchEmailModal({ isOpen, onClose, emails: initialEmails, onFini
     if (onFinish) onFinish();
   };
 
+  const handleBodyChange = (index: number, newBody: string) => {
+    setEmails(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], body: newBody };
+      return next;
+    });
+  };
+
   const pendingCount = emails.filter(e => e.status !== 'sent').length;
   const sentCount = emails.filter(e => e.status === 'sent').length;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !isProcessing && onClose()}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl rounded-2xl">
-        <DialogHeader className="p-6 bg-slate-900 text-white">
+      <DialogContent className="sm:max-w-[800px] h-[90vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl rounded-2xl bg-white">
+        <DialogHeader className="p-8 bg-primary text-white shrink-0">
           <div className="flex items-center justify-between">
             <div>
-              <DialogTitle className="text-2xl font-black">Email Outreach Review</DialogTitle>
-              <DialogDescription className="text-slate-400 font-medium mt-1">
-                Review {emails.length} drafted emails before sending.
+              <DialogTitle className="text-3xl font-black tracking-tight">Outreach Campaign</DialogTitle>
+              <DialogDescription className="text-white/80 font-bold mt-2">
+                Review and distribute {emails.length} personalized outreach emails.
               </DialogDescription>
             </div>
-            <div className="flex items-center gap-3">
-               <div className="flex flex-col items-end">
-                <span className="text-xs font-black uppercase tracking-widest text-slate-500">Progress</span>
-                <span className="text-xl font-black text-white">{sentCount}/{emails.length}</span>
-               </div>
+            <div className="flex flex-col items-end bg-black/10 p-4 rounded-2xl border border-white/10">
+              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60 mb-1">Success Rate</span>
+              <span className="text-2xl font-black text-white">{sentCount} / {emails.length}</span>
             </div>
           </div>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 p-6 bg-slate-50">
-          <div className="space-y-6">
+        <div className="flex-1 overflow-hidden flex flex-col bg-slate-50">
+          <ScrollArea className="flex-1 px-8 py-6">
+            <div className="space-y-6 max-w-2xl mx-auto pb-12">
             {emails.map((email, idx) => (
               <div 
                 key={email.applicantId} 
@@ -170,41 +178,56 @@ export function BatchEmailModal({ isOpen, onClose, emails: initialEmails, onFini
                   </div>
                 </div>
                 <div className="p-4 bg-slate-50/30">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2">Subject: {email.subject}</div>
-                  <div className="text-sm text-slate-600 line-clamp-3 whitespace-pre-wrap italic">
-                    {email.body}
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Subject: {email.subject}</div>
+                    {email.status !== 'sent' && (
+                      <div className="flex items-center gap-1 text-[10px] font-black text-primary uppercase tracking-widest">
+                        <Edit3 className="h-3 w-3" />
+                        Editable Preview
+                      </div>
+                    )}
                   </div>
+                  <Textarea 
+                    value={email.body}
+                    onChange={(e) => handleBodyChange(idx, e.target.value)}
+                    disabled={email.status === 'sent' || isProcessing}
+                    className={cn(
+                      "text-sm text-slate-600 bg-white border-slate-200 rounded-xl min-h-[150px] resize-none focus:ring-primary/20",
+                      email.status === 'sent' && "bg-transparent border-transparent italic text-slate-400 cursor-not-allowed shadow-none"
+                    )}
+                  />
                 </div>
               </div>
             ))}
-          </div>
-        </ScrollArea>
+            </div>
+          </ScrollArea>
+        </div>
 
-        <DialogFooter className="p-6 bg-white border-t flex items-center justify-between sm:justify-between gap-4">
+        <DialogFooter className="p-8 bg-white border-t shrink-0 flex items-center justify-between sm:justify-between gap-6">
           <Button 
             variant="ghost" 
             onClick={onClose} 
             disabled={isProcessing}
-            className="rounded-xl font-bold text-slate-500"
+            className="rounded-2xl font-black text-slate-400 hover:text-slate-900 transition-colors h-14 px-8 uppercase tracking-widest text-[10px]"
           >
-            {sentCount > 0 ? 'Close' : 'Review Later'}
+            {sentCount > 0 ? 'Finish Campaign' : 'Dismiss for Now'}
           </Button>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
              {pendingCount > 0 && (
                <Button 
                 onClick={handleSendAll} 
                 disabled={isProcessing}
-                className="rounded-xl font-bold bg-primary hover:bg-primary/90 px-8 h-12 shadow-lg shadow-primary/20"
+                className="rounded-2xl font-black bg-primary hover:bg-primary/90 px-10 h-14 shadow-2xl shadow-primary/30 uppercase tracking-widest text-[10px]"
               >
                 {isProcessing ? (
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Sending Batch...
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Executing Batch...
                   </div>
                 ) : (
                   <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Send All {pendingCount} Emails
+                    <Send className="h-5 w-5 mr-3" />
+                    Deploy to all {pendingCount} Recipients
                   </>
                 )}
               </Button>

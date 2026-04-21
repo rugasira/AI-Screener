@@ -8,6 +8,7 @@ import JobsPage from '@/pages/JobsPage';
 import JobDetailsPage from '@/pages/JobDetailsPage';
 import ScreeningPage from '@/pages/ScreeningPage';
 import ApplicantsPage from '@/pages/ApplicantsPage';
+import SettingsPage from '@/pages/SettingsPage';
 import LoginPage from '@/pages/LoginPage';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 
@@ -72,6 +73,7 @@ export default function App() {
                   <Route path="/shortlisted" element={<ShortlistedPage />} />
                   <Route path="/screening/:jobId" element={<ScreeningPage />} />
                   <Route path="/screening/:jobId/:screeningId" element={<ScreeningPage />} />
+                  <Route path="/settings" element={<SettingsPage />} />
                 </Routes>
               </DashboardLayout>
             </ProtectedRoute>

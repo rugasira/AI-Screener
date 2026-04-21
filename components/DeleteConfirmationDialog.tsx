@@ -31,7 +31,7 @@ export function DeleteConfirmationDialog({
 }: DeleteConfirmationDialogProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[400px] rounded-2xl border-0 shadow-2xl p-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[400px] rounded-none border-0 shadow-2xl p-0 overflow-hidden">
         <div className="bg-destructive/10 p-6 flex flex-col items-center justify-center text-destructive">
           <div className="bg-destructive/20 p-3 rounded-full mb-4">
             <AlertCircle className="h-8 w-8" />
@@ -46,7 +46,7 @@ export function DeleteConfirmationDialog({
             <Button
               variant="outline"
               onClick={() => onOpenChange(false)}
-              className="flex-1 rounded-xl font-bold h-11 border-border"
+              className="flex-1 rounded-none font-bold h-11 border-border"
               disabled={isLoading}
             >
               Cancel
@@ -54,7 +54,7 @@ export function DeleteConfirmationDialog({
             <Button
               variant="destructive"
               onClick={onConfirm}
-              className="flex-1 rounded-xl font-bold h-11 shadow-lg shadow-destructive/20"
+              className="flex-1 rounded-none font-bold h-11 shadow-none"
               disabled={isLoading}
             >
               {isLoading ? (
