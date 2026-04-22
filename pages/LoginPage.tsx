@@ -53,7 +53,8 @@ export default function LoginPage() {
       if (error.code === 'auth/wrong-password' || error.code === 'auth/user-not-found' || error.message?.includes('invalid-credential')) {
         message = "The email or password you entered is incorrect. Please check your details and try again.";
       } else if (error.code === 'auth/email-already-in-use') {
-        message = "This email is already registered. Please login instead.";
+        message = "This email is already registered. Switching to Sign In instead.";
+        setIsRegistering(false);
       } else if (error.code === 'auth/weak-password') {
         message = "Password is too weak. Please use at least 6 characters.";
       }
@@ -65,19 +66,14 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-primary py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
-      {/* Dot pattern matching the user's reference */}
-      <div className="absolute inset-0 bg-dot-pattern text-white/10 pointer-events-none" />
-      
-      {/* Refined gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/80 via-primary to-primary/40 pointer-events-none" />
-      
-      <div className="absolute inset-0 overflow-hidden pointer-events-none text-white/5 flex items-center justify-center opacity-10 select-none">
+    <div className="min-h-screen flex items-center justify-center bg-white py-12 px-4 sm:px-6 lg:px-8 relative overflow-hidden">
+      {/* Decorative background elements moved or lightened for white BG */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none text-slate-100 flex items-center justify-center opacity-40 select-none">
         <h2 className="text-[20vw] font-black tracking-tighter transform -rotate-12 translate-x-20">UMURAVA</h2>
       </div>
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-primary/5 blur-[120px] animate-pulse"></div>
-        <div className="absolute top-[60%] -right-[10%] w-[50%] h-[50%] rounded-full bg-blue-100/20 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }}></div>
+        <div className="absolute top-[10%] left-[10%] w-[30%] h-[30%] rounded-full bg-primary/5 blur-[100px]"></div>
+        <div className="absolute bottom-[10%] right-[10%] w-[40%] h-[40%] rounded-full bg-blue-50 blur-[120px]"></div>
       </div>
 
       <motion.div
@@ -98,32 +94,38 @@ export default function LoginPage() {
           <p className="text-slate-500 font-medium">Secure access to the recruitment portal.</p>
         </div>
 
-        <Card className="bg-white border-0 shadow-2xl rounded-none overflow-hidden text-slate-900">
-          <CardHeader className="pb-2 pt-10 px-10">
-            <CardTitle className="text-3xl font-black text-slate-900 flex items-center gap-3">
-              <ShieldCheck className="h-8 w-8 text-primary" />
+        <Card className="bg-primary border-0 shadow-2xl rounded-none overflow-hidden text-white relative">
+          {/* Dot pattern inside the card matching user request */}
+          <div className="absolute inset-0 bg-dot-pattern text-white/20 pointer-events-none" />
+          
+          {/* Subtle gradient inside card for depth */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-primary/80 pointer-events-none" />
+
+          <CardHeader className="pb-2 pt-10 px-10 relative z-10">
+            <CardTitle className="text-3xl font-black text-white flex items-center gap-3">
+              <ShieldCheck className="h-8 w-8 text-white" />
               {isRegistering ? 'Create Account' : 'Admin Login'}
             </CardTitle>
-            <CardDescription className="text-slate-500 font-medium mt-2">
+            <CardDescription className="text-white/70 font-medium mt-2">
               {isRegistering ? 'Join the recruiting team' : 'Log in to manage your talent pipeline'}
             </CardDescription>
           </CardHeader>
-          <CardContent className="pt-8 px-10 pb-12">
+          <CardContent className="pt-8 px-10 pb-12 relative z-10">
             <form onSubmit={handleAuth} className="space-y-6 mb-8">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-900 text-[10px] font-black uppercase tracking-widest ml-1">Email Address</Label>
+                <Label htmlFor="email" className="text-white text-[10px] font-black uppercase tracking-widest ml-1">Email Address</Label>
                 <Input 
-                  id="email" 
+                   id="email" 
                   type="email" 
                   placeholder="admin@umurava.africa" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="bg-slate-50 border-slate-200 text-slate-900 placeholder:text-slate-400 h-14 rounded-none focus:ring-primary/20 transition-all font-medium"
+                  className="bg-white/10 border-white/20 text-white placeholder:text-white/40 h-14 rounded-none focus:ring-white/20 transition-all font-medium"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-slate-900 text-[10px] font-black uppercase tracking-widest ml-1">Password</Label>
+                <Label htmlFor="password" className="text-white text-[10px] font-black uppercase tracking-widest ml-1">Password</Label>
                 <div className="relative">
                   <Input 
                     id="password" 
@@ -131,21 +133,21 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="bg-slate-50 border-slate-200 text-slate-900 h-14 rounded-none focus:ring-primary/20 transition-all font-medium pr-12"
+                    className="bg-white/10 border-white/20 text-white h-14 rounded-none focus:ring-white/20 transition-all font-medium pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-900 transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-white/40 hover:text-white transition-colors"
                   >
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
               </div>
-              <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-white h-14 rounded-none font-black shadow-lg shadow-primary/20 transition-all active:scale-[0.98]" disabled={isSubmitting}>
+              <Button type="submit" className="w-full bg-white hover:bg-slate-50 text-primary h-14 rounded-none font-black shadow-lg shadow-black/10 transition-all active:scale-[0.98]" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <div className="flex items-center">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
                     {isRegistering ? 'Creating...' : 'Verifying...'}
                   </div>
                 ) : (
@@ -161,7 +163,7 @@ export default function LoginPage() {
               <button 
                 type="button"
                 onClick={() => setIsRegistering(!isRegistering)}
-                className="text-xs font-bold text-slate-500 hover:text-primary hover:underline transition-all"
+                className="text-xs font-bold text-white/60 hover:text-white hover:underline transition-all"
               >
                 {isRegistering ? 'Already have an account? Sign In' : 'New admin? Request Access / Sign Up'}
               </button>
@@ -169,10 +171,10 @@ export default function LoginPage() {
             
             <div className="relative mb-8">
               <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-slate-100" />
+                <span className="w-full border-t border-white/10" />
               </div>
               <div className="relative flex justify-center text-[10px] font-black uppercase tracking-widest">
-                <span className="bg-white px-4 text-slate-400">
+                <span className="bg-primary px-4 text-white/40">
                   Secure Credentials
                 </span>
               </div>
@@ -181,7 +183,7 @@ export default function LoginPage() {
             <Button 
               onClick={signInWithGoogle} 
               variant="outline" 
-              className="w-full bg-slate-50 border-slate-200 text-slate-900 hover:bg-slate-100 h-14 rounded-none font-bold transition-all shadow-none" 
+              className="w-full bg-white/5 border-white/20 text-white hover:bg-white/10 h-14 rounded-none font-bold transition-all shadow-none" 
               size="lg"
             >
               <svg className="mr-3 h-5 w-5" aria-hidden="true" focusable="false" data-prefix="fab" data-icon="google" role="img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 488 512">
